@@ -62,6 +62,18 @@ pub const RED: Rgba = hex(0x00f0_705f);
 pub const BLUE: Rgba = hex(0x0076_a8ff);
 /// Fully transparent.
 pub const CLEAR: Rgba = hexa(0x0000_0000);
+/// Pod tags in merged logs.
+pub const MAGENTA: Rgba = hex(0x00b5_a2ce);
+/// Pod tags in merged logs.
+pub const CYAN: Rgba = hex(0x008c_bdc3);
+/// Pod tags in merged logs.
+pub const PEACH: Rgba = hex(0x00d1_9a66);
+/// Search matches: amber at 28%.
+pub const MARK: Rgba = hexa(0xe5c0_7b47);
+
+/// Pod tag colours in merged logs, picked by pod name. Red and amber are
+/// left out: they mean errors and warnings in the level column.
+pub const TAG_COLORS: [Rgba; 5] = [BLUE, MAGENTA, CYAN, GREEN, PEACH];
 
 /// Letter-tile colours for clusters, picked by name.
 pub const TILE_COLORS: [Rgba; 6] = [

@@ -18,6 +18,7 @@ tracing.workspace = true
 # into lockfile resolution, and gpui-fast pins crates below our lock (see the
 # gpui skill). It is the same crate the kit re-exports, so types match.
 gpui-pre = { version = "=0.3.11", features = ["test-support"] }
+jiff.workspace = true
 
 [lints]
 workspace = true
