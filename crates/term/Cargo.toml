@@ -28,8 +28,11 @@ tokio = { workspace = true }
 # GPUI's test support for the pane tests, turned on through gpui-pre as the
 # ui crate does (see the gpui skill). It is the crate the kit re-exports.
 gpui-pre = { version = "=0.3.11", features = ["test-support"] }
-# The shell example draws with the app's tokens and fonts.
+# The examples draw with the app's tokens and fonts, and kube_shell runs
+# the engine the way the app does.
 ui.workspace = true
+engine.workspace = true
+anyhow.workspace = true
 tracing-subscriber.workspace = true
 
 [lints]

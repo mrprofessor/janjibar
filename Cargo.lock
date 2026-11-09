@@ -7444,6 +7444,8 @@ dependencies = [
 name = "term"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "engine",
  "ghostty-vt",
  "gpui-kit",
  "gpui-pre",
