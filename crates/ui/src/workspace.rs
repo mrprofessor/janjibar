@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 
 use crate::OpenLogs;
 use crate::assets::Icon;
+use crate::forwards::{self, ForwardsPane};
 use crate::helm::{self, HelmView};
 use crate::log_pane::{LogPane, LogPaneEvent};
 use crate::pod_table::{self, PodTable};
@@ -54,6 +55,9 @@ pub struct Workspace {
     /// The open log pane, under the pods.
     logs: Option<OpenLogPane>,
     last_log_tab: u64,
+    /// The port-forward manager, shown under the pod table when open.
+    forwards: Entity<ForwardsPane>,
+    show_forwards: bool,
     view: MainView,
     helm: Entity<HelmView>,
     _events: Task<()>,
@@ -75,6 +79,7 @@ impl Workspace {
     ) -> Self {
         let table =
             cx.new(|cx| TableState::new(PodTable::default(), window, cx).col_movable(false));
+        let forwards = cx.new(|cx| ForwardsPane::new(Rc::clone(&send), window, cx));
         // tokio's receiver is executor-agnostic, so GPUI's foreground
         // executor can await it directly.
         let events_task = cx.spawn(async move |this, cx| {
@@ -95,6 +100,8 @@ impl Workspace {
             has_rows: false,
             logs: None,
             last_log_tab: 0,
+            forwards,
+            show_forwards: false,
             view: MainView::Pods,
             helm,
             _events: events_task,
@@ -109,6 +116,14 @@ impl Workspace {
         self.selected = Some(context.clone());
         self.has_rows = false;
         self.close_logs(cx);
+        let namespace = self
+            .catalog
+            .as_ref()
+            .and_then(|c| c.get(&context))
+            .and_then(|c| c.namespace.clone());
+        self.forwards.update(cx, |pane, cx| {
+            pane.set_context(Some(context.clone()), namespace.as_deref(), cx);
+        });
         let helm_context = Some(context.clone());
         self.helm
             .update(cx, |helm, cx| helm.set_context(helm_context, cx));
@@ -218,6 +233,9 @@ impl Workspace {
             }
             // The kinds sidebar and generic tables arrive with the watch hub.
             Event::Kinds(_) | Event::Table(_) => return,
+            Event::Forwards(rows) => {
+                self.forwards.update(cx, |pane, cx| pane.set_rows(rows, cx));
+            }
             Event::Helm(event) => self.helm.update(cx, |helm, cx| helm.apply(event, cx)),
         }
         cx.notify();
@@ -300,7 +318,16 @@ impl Render for Workspace {
                                             .flex_none()
                                             .child(open.pane.clone())
                                     }),
-                            ),
+                            )
+                            // Port-forwards span clusters, so they show in every view.
+                            .when(self.show_forwards, |el| {
+                                el.child(
+                                    div()
+                                        .h(px(forwards::PANE_HEIGHT))
+                                        .flex_none()
+                                        .child(self.forwards.clone()),
+                                )
+                            }),
                     )
                     .child(self.render_status_bar(cx)),
             )
@@ -323,6 +350,7 @@ impl Workspace {
             .child(section_label("Clusters"))
             .child(self.render_clusters(cx))
             .child(self.render_kinds(cx))
+            .child(self.render_forwards_row(cx))
             .child(div().flex_1())
             .child(self.render_sidebar_footer())
     }
@@ -516,6 +544,19 @@ impl Workspace {
                         }),
                     ),
             )
+    }
+
+    fn render_forwards_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let pane = self.forwards.read(cx);
+        div().mt(px(10.0)).px(px(8.0)).child(forwards::sidebar_row(
+            pane.running(),
+            pane.total(),
+            self.show_forwards,
+            cx.listener(|this, _, _, cx| {
+                this.show_forwards = !this.show_forwards;
+                cx.notify();
+            }),
+        ))
     }
 
     fn render_sidebar_footer(&self) -> impl IntoElement {

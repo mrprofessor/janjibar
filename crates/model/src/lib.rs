@@ -6,6 +6,7 @@
 pub mod brand;
 mod catalog;
 mod event;
+mod forward;
 mod helm;
 mod helm_feed;
 mod kinds;
@@ -16,6 +17,9 @@ mod table;
 
 pub use catalog::{Catalog, ContextInfo, ContextName, SourceProblem};
 pub use event::{Command, ConnectError, ConnectionState, Event};
+pub use forward::{
+    ForwardId, ForwardParseError, ForwardRow, ForwardSpec, ForwardState, ForwardTarget,
+};
 pub use helm::{HelmChart, HelmRelease, HelmReleaseDetails, HelmRevision, HelmStatus, HelmStorage};
 pub use helm_feed::{
     HelmChartInfo, HelmCommand, HelmEvent, HelmHistoryEntry, HelmReleaseKey, HelmRow, HelmSnapshot,
@@ -30,7 +34,8 @@ pub use log::{
 pub use metrics::{
     ClusterMetric, IngressMetric, MetricQuery, MetricSeries, NodeMetric, PodMetric, PodSelection,
     PodSet, PrometheusProvider, PrometheusSettings, PrometheusSource, PrometheusUrl, PvcMetric,
-    QueryMethod, Sample, ServiceRef, TimeRange, WorkloadKind,
+    QueryMethod, Sample, ServiceRef, TimeRange, Usage, UsageHistory, UsageInterest, UsageObject,
+    UsageScope, UsageSnapshot, UsageStatus, WorkloadKind,
 };
 pub use pod::{Health, PodRow, PodSnapshot, Ready};
 pub use table::{Column, ColumnType, TableRow, TableSnapshot};

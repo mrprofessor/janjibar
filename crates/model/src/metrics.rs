@@ -1,12 +1,21 @@
-//! Prometheus metrics: where to find Prometheus, what to ask, what comes back.
+//! Metrics: where to find Prometheus, what to ask, what comes back, and CPU
+//! and memory usage from the metrics API.
 //!
 //! The providers and query names follow Freelens, so its settings and charts
 //! map one to one. A [`MetricQuery`] says what to measure; the engine turns
 //! it into PromQL for the cluster's provider.
+//!
+//! Without Prometheus, the metrics API (`metrics.k8s.io`, usually served by
+//! metrics-server) still gives current CPU and memory per pod and node. The
+//! engine polls it while a view needs it and keeps a history for the session
+//! ([`UsageSnapshot`]). Both sources produce [`MetricSeries`] for charts.
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+
+use crate::ContextName;
 
 /// How a Prometheus install is found and which PromQL it understands.
 ///
@@ -469,6 +478,111 @@ pub struct Sample {
     pub value: f64,
 }
 
+/// A pod or node whose CPU and memory the metrics API reports.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum UsageObject {
+    /// A node, by name.
+    Node(Arc<str>),
+    /// A pod.
+    Pod {
+        /// The pod's namespace.
+        namespace: Arc<str>,
+        /// The pod's name.
+        name: Arc<str>,
+    },
+}
+
+impl UsageObject {
+    /// The labels a Prometheus series for this object would carry: `node`,
+    /// or `namespace` and `pod`.
+    pub fn labels(&self) -> BTreeMap<String, String> {
+        match self {
+            Self::Node(name) => BTreeMap::from([("node".to_owned(), name.to_string())]),
+            Self::Pod { namespace, name } => BTreeMap::from([
+                ("namespace".to_owned(), namespace.to_string()),
+                ("pod".to_owned(), name.to_string()),
+            ]),
+        }
+    }
+}
+
+/// One list request to the metrics API.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum UsageScope {
+    /// Every node.
+    Nodes,
+    /// Pods in one namespace, or in every namespace for `None`.
+    Pods(Option<Arc<str>>),
+}
+
+impl UsageScope {
+    /// The scope a pod or node is listed in, narrowest first.
+    pub fn of(object: &UsageObject) -> Self {
+        match object {
+            UsageObject::Node(_) => Self::Nodes,
+            UsageObject::Pod { namespace, .. } => Self::Pods(Some(Arc::clone(namespace))),
+        }
+    }
+}
+
+/// What a view needs from the metrics API. Polling runs while at least one
+/// interest is held.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum UsageInterest {
+    /// Current values for a table's CPU and memory columns.
+    Latest(UsageScope),
+    /// One object's history this session, for its charts.
+    History(UsageObject),
+}
+
+/// CPU and memory of one object, as `kubectl top` shows them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Usage {
+    /// CPU in cores, averaged over the metrics window.
+    pub cpu: Sample,
+    /// Working set memory in bytes.
+    pub memory: Sample,
+}
+
+/// One object's usage history this session, oldest sample first.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UsageHistory {
+    /// The object.
+    pub object: UsageObject,
+    /// CPU in cores, labelled like the Prometheus series for the object.
+    pub cpu: MetricSeries,
+    /// Memory in bytes, labelled the same way.
+    pub memory: MetricSeries,
+}
+
+/// How the last poll of a scope went.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UsageStatus {
+    /// It answered. Values are current.
+    Live,
+    /// The cluster serves no metrics API: metrics-server is not installed or
+    /// not running. Holds the server's message.
+    Unavailable(String),
+    /// The user may not read the metrics API here. Holds the server's message.
+    Forbidden(String),
+    /// The poll failed. Older values, if any, stay. Holds the error.
+    Failed(String),
+}
+
+/// One context's usage, sent after each poll round.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UsageSnapshot {
+    /// The context.
+    pub context: ContextName,
+    /// How the last poll of each scope a view asked for went.
+    pub status: BTreeMap<UsageScope, UsageStatus>,
+    /// The latest usage of every pod and node polled, from the last poll of
+    /// its scope that worked.
+    pub latest: BTreeMap<UsageObject, Usage>,
+    /// History for each object a view asked about, in object order.
+    pub history: Vec<UsageHistory>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,6 +627,18 @@ mod tests {
         assert!(!text.contains("s3cret"), "{text}");
         assert!(!text.contains("tenant-a"), "{text}");
         assert!(text.contains("X-Scope-OrgID"), "{text}");
+    }
+
+    #[test]
+    fn usage_labels_match_prometheus() {
+        let pod = UsageObject::Pod {
+            namespace: "shop".into(),
+            name: "web-1".into(),
+        };
+        assert_eq!(pod.labels()["namespace"], "shop");
+        assert_eq!(pod.labels()["pod"], "web-1");
+        assert_eq!(UsageObject::Node("n1".into()).labels()["node"], "n1");
+        assert_eq!(UsageScope::of(&pod), UsageScope::Pods(Some("shop".into())));
     }
 
     #[test]

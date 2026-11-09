@@ -1,10 +1,11 @@
 //! Messages between the UI and the engine.
 
 use std::fmt;
+use std::sync::Arc;
 
 use crate::{
-    Catalog, ContextName, HelmCommand, HelmEvent, KindCatalog, LogChunk, LogRequest, LogState,
-    LogTabId, PodSnapshot, TableSnapshot,
+    Catalog, ContextName, ForwardId, ForwardRow, ForwardSpec, HelmCommand, HelmEvent, KindCatalog,
+    LogChunk, LogRequest, LogState, LogTabId, PodSnapshot, TableSnapshot,
 };
 
 /// What the UI asks the engine to do.
@@ -18,6 +19,10 @@ pub enum Command {
     OpenLogs(LogRequest),
     /// Close a log tab and stop its streams.
     CloseLogs(LogTabId),
+    /// Start a port-forward and save it for its cluster.
+    StartForward(ForwardSpec),
+    /// Stop a port-forward and forget it.
+    StopForward(ForwardId),
     /// Helm releases: watch them, or load one revision.
     Helm(HelmCommand),
 }
@@ -49,6 +54,8 @@ pub enum Event {
         /// Its new state.
         state: LogState,
     },
+    /// Every port-forward, across all clusters, sorted by local port.
+    Forwards(Arc<[ForwardRow]>),
     /// Helm releases of the selected context, or one decoded revision.
     Helm(HelmEvent),
 }
