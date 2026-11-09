@@ -193,18 +193,39 @@ Rules:
 
 - Keep logic out of views so most tests are plain `#[test]`s on `model`,
   `engine` and pure `ui` helpers (see `pod_table.rs`, `theme.rs`).
-- **GPUI view tests are blocked for now.** Enabling `gpui-kit`'s
-  `test-support` feature makes Cargo try to resolve `gpui-fast`, which pins
-  `taffy =0.15.0` and conflicts with the lockfile. Revisit on the next
-  gpui-kit bump. When it works, the shape is:
-  - `gpui-kit = { workspace = true, features = ["test-support"] }` under
-    `[dev-dependencies]`.
-  - `#[gpui_kit::test]` with `cx: &mut TestAppContext`; import kit types
-    explicitly so GPUI's `test` macro does not shadow `#[test]`.
-  - `cx.add_window_view(|window, cx| View::new(window, cx))` returns the view
-    and a `VisualTestContext`; `cx.simulate_keystrokes("j j")` drives key
-    bindings; `cx.run_until_parked()` drains tasks;
-    `cx.executor().advance_clock(d)` moves fake time.
+- View tests live in `crates/ui/tests/views.rs`. The harness in
+  `tests/support/harness.rs` opens the workspace in a headless window, feeds
+  it engine `Event`s and records the `Command`s it sends:
+
+```rust
+#[gpui_kit::test]
+fn clicking_a_context_connects_to_it(cx: &mut TestAppContext) {
+    let mut h = Harness::new(cx);
+    h.send(Event::Catalog(catalog(&["prod-eu"])));
+    h.click("cluster-prod-eu");
+    assert_eq!(h.take_commands(), [Command::SelectContext("prod-eu".into())]);
+}
+```
+
+- Find elements by tagging them with
+  `.debug_selector(|| format!("cluster-{name}"))`. It costs nothing outside
+  debug test builds. `cx.debug_bounds("cluster-prod-eu")` gives the bounds in
+  the last frame, or `None` if it was not drawn. Virtualized lists draw only
+  visible rows.
+- `cx.simulate_click(bounds.center(), Modifiers::none())` clicks through real
+  hit testing. `cx.run_until_parked()` drains tasks and redraws.
+  `cx.simulate_keystrokes("j j")` drives key bindings;
+  `cx.executor().advance_clock(d)` moves fake time.
+- Import kit types by name (`use gpui_kit::{TestAppContext, px}`), never
+  `gpui_kit::*`, or GPUI's `test` macro shadows `#[test]`.
+- Test support comes from `gpui-pre = { version = "=0.3.11", features =
+  ["test-support"] }` under `[dev-dependencies]` (its lib is named `gpui`, so
+  the macro's paths resolve). **Do not enable `test-support` on gpui-kit,
+  gpui-base or gpui-component.** They name `gpui-fast?/test-support`, Cargo
+  then puts gpui-fast in the lockfile, and gpui-fast's exact pins
+  (`taffy =0.15.0`, `unicode-properties =0.1.3`) conflict with ours
+  (longbridge/gpui-kit#3865). So the kit's `gpui_kit::test` helpers (find and
+  click by id) are not available yet.
 - To see a change, run the app against the fake cluster (see `AGENTS.md`).
   Capture only the app window: list its window ids by PID with
   `CGWindowListCopyWindowInfo`, then `screencapture -x -o -l <id> out.png`.

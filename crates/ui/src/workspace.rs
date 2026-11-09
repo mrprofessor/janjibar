@@ -234,6 +234,7 @@ impl Workspace {
         };
         div()
             .id(SharedString::from(format!("cluster-{}", info.name)))
+            .debug_selector(|| format!("cluster-{}", info.name))
             .h(px(theme::ROW_HEIGHT))
             .flex()
             .items_center()

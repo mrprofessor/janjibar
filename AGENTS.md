@@ -20,6 +20,7 @@ crates/
   app/      the binary: startup, shell PATH sync, tokio runtime, window
   engine/   tokio side: kubeconfig catalog, clients, watches, row projection
   model/    plain data that crosses the bridge (rows, catalog, events)
+  helm/     reads Helm releases from Secrets and ConfigMaps (no GPUI)
   bridge/   vendored gpui_tokio; tokio <-> GPUI glue
   ui/       GPUI views: shell, sidebar, tabs, tables, theme, fonts
   term/     terminal pane on libghostty-vt; PTY and byte-stream sources
@@ -116,6 +117,8 @@ There is no cluster in CI, and engine tests must not need one.
 - To see the app with data, run the same server as an example:
   `cargo run -p engine --example fake_cluster -- --kubeconfig /tmp/fake.yaml`,
   then start the app with `KUBECONFIG=/tmp/fake.yaml` and `--context fake`.
+- `crates/ui/tests/views.rs` drives the workspace in a headless GPUI window
+  with a fake engine. The gpui skill has the pattern.
 - The owner's machine has a kind cluster for manual checks. Never change
   anything in a real cluster outside a throwaway namespace you delete after.
 - Screenshots: capture only the app's window (`screencapture -l <id>`), never
