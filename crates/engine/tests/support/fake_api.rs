@@ -521,7 +521,9 @@ impl FakeApi {
     /// also show up in pod Tables; everything else to the generic store.
     pub fn put<K>(&self, object: &K)
     where
-        K: k8s_openapi::Resource + k8s_openapi::Metadata<Ty = ObjectMeta> + serde::Serialize,
+        K: k8s_openapi::Resource
+            + k8s_openapi::Metadata<Ty = ObjectMeta>
+            + k8s_openapi::serde::Serialize,
     {
         let value = serde_json::to_value(object).unwrap_or_default();
         let path = collection::<K>();
