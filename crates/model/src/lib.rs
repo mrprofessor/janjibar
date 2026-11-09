@@ -6,8 +6,10 @@
 pub mod brand;
 mod catalog;
 mod event;
+mod helm;
 mod pod;
 
 pub use catalog::{Catalog, ContextInfo, ContextName, SourceProblem};
 pub use event::{Command, ConnectError, ConnectionState, Event};
+pub use helm::{HelmChart, HelmRelease, HelmReleaseDetails, HelmRevision, HelmStatus, HelmStorage};
 pub use pod::{Health, PodRow, PodSnapshot, Ready};
