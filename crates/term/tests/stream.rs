@@ -13,6 +13,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use term::frame::{Color, TerminalRow};
 use term::input::KeyInput;
 use term::{
     Engine, EngineOptions, ExitStatus, FrameHandle, FrameSink, FrameSource, StartOptions,
@@ -100,6 +101,53 @@ fn a_custom_stream_renders_output_gets_input_and_sizes_and_reports_exit() {
 
     handle.close();
     wait_event(&peer, &StreamEvent::Closed);
+}
+
+/// The style of the run in `row` that holds `text`, ignoring the blanks
+/// that pad the last run to the row's end.
+fn run_for<'a>(row: &'a TerminalRow, text: &str) -> &'a term::frame::Style {
+    &row.runs
+        .iter()
+        .find(|run| row.text[run.text.clone()].trim_end() == text)
+        .unwrap_or_else(|| panic!("no run for {text:?} in {:?}", row.runs))
+        .style
+}
+
+#[test]
+fn sequences_split_across_chunks_draw_as_if_they_came_whole() {
+    let (peer, sink, handle) = started(Viewport::new(40, 5, 8, 16).unwrap());
+
+    // A websocket can cut anywhere: inside a CSI, between ESC and its
+    // final bytes, inside a UTF-8 character and inside an OSC.
+    peer.output(b"plain \x1b[3");
+    let held = wait_for(&sink, handle.as_ref(), |s| s.frame.text().contains("plain"));
+    assert_eq!(
+        held.frame.text().lines().next(),
+        Some("plain"),
+        "half a sequence is held back, never drawn"
+    );
+    for chunk in [
+        &b"1mred\x1b"[..],
+        b"[0m caf\xc3",
+        b"\xa9 \x1b]2;pod sh",
+        b"ell\x07\r\n$ ",
+    ] {
+        peer.output(chunk);
+    }
+
+    let shown = wait_for(&sink, handle.as_ref(), |s| {
+        s.frame.text().contains('$') && s.title == "pod shell"
+    });
+    let text = shown.frame.text();
+    let mut lines = text.lines();
+    assert_eq!(lines.next(), Some("plain red café"));
+    assert_eq!(lines.next(), Some("$"));
+    let row = &shown.frame.rows[0];
+    assert_eq!(run_for(row, "red").foreground, Color::Indexed(1));
+    assert_eq!(run_for(row, " café").foreground, Color::Default);
+    assert_eq!(shown.frame.cursor.row, 1);
+    assert_eq!(shown.frame.cursor.column, 2);
+    handle.close();
 }
 
 /// Starts an engine on a stream, takes its first frame and grants credit
