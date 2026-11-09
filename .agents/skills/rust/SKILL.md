@@ -139,7 +139,7 @@ See `references/async.md` for details and sources.
 
 ## Module layout
 
-- One concept per file, named for what it does: `catalog.rs`, `pods.rs`,
+- One concept per file, named for what it does: `catalog.rs`, `hub.rs`,
   `shell_env.rs`. Group by feature, not by kind (no `types.rs`, `utils.rs`)
   [M-BALANCED-MODULES].
 - Use `foo.rs` plus `foo/` for submodules, not `foo/mod.rs`.

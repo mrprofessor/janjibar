@@ -60,7 +60,7 @@ In this repo, blocking calls are: reading kubeconfig files, `Client::try_from`
 - Dropping an `AbortHandle` does nothing. Dropping a `JoinSet` aborts all its
   tasks. <https://docs.rs/tokio/latest/tokio/task/struct.JoinSet.html>
 - To tie a task's life to an owner, keep a guard that aborts on drop. The
-  engine has `AbortOnDrop` in `crates/engine/src/pods.rs`; tokio-util has
+  engine has `AbortOnDrop` in `crates/engine/src/task.rs`; tokio-util has
   `AbortOnDropHandle`. GPUI's `Task` already cancels on drop.
 - For cooperative shutdown with cleanup, use tokio-util's `CancellationToken`
   (and `TaskTracker` to wait). <https://tokio.rs/tokio/topics/shutdown>

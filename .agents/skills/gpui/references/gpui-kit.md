@@ -35,9 +35,9 @@ graphite tokens. Read colours in views with
 ```rust
 use gpui_kit::component::table::{Column, DataTable, TableDelegate, TableState};
 
-struct PodTable { rows: Arc<[PodRow]>, columns: Vec<Column> }
+struct ResourceTable { columns: Arc<[model::Column]>, rows: Arc<[model::TableRow]> }
 
-impl TableDelegate for PodTable {
+impl TableDelegate for ResourceTable {
     fn columns_count(&self, _: &App) -> usize { self.columns.len() }
     fn rows_count(&self, _: &App) -> usize { self.rows.len() }
     fn column(&self, ix: usize, _: &App) -> Column { self.columns[ix].clone() }
@@ -45,7 +45,7 @@ impl TableDelegate for PodTable {
                  _: &mut Context<TableState<Self>>) -> impl IntoElement { /* cell */ }
 }
 
-let state = cx.new(|cx| TableState::new(PodTable::default(), window, cx));
+let state = cx.new(|cx| TableState::new(ResourceTable::default(), window, cx));
 // in render (Sizable trait in scope):
 DataTable::new(&state).with_size(Size::Small).header_row_height(px(28.)) // 30 px rows
 ```
@@ -58,8 +58,8 @@ DataTable::new(&state).with_size(Size::Small).header_row_height(px(28.)) // 30 p
 - `perform_sort` is called with the column and direction; sorting belongs in
   the engine eventually, the delegate just records the choice.
 - After swapping rows: `state.update(cx, |t, cx| { t.delegate_mut().rows = rows; cx.notify(); })`.
-  `refresh` is only for column changes. `ui::pod_table::set_rows` also keeps
-  the selected pod selected by namespace and name. Note `set_selected_row`
+  `refresh` is only for column changes. `ui::resource_table::set_rows` also
+  keeps the selected object selected by key. Note `set_selected_row`
   scrolls to the row, so call it only when the index really changed.
 - Events: subscribe to `TableEvent` (`SelectRow`, `DoubleClickedRow`,
   `ColumnWidthsChanged`...).

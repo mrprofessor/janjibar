@@ -18,7 +18,8 @@ proxy. macOS first; Linux and Windows come after 1.0.
 ```
 crates/
   app/      the binary: startup, shell PATH sync, tokio runtime, window
-  engine/   tokio side: kubeconfig catalog, clients, watches, row projection
+  engine/   tokio side: kubeconfig catalog, clients, the watch hub, owner chains
+  kinds/    per-kind columns, rows and inspector details (no I/O, no GPUI)
   model/    plain data that crosses the bridge (rows, catalog, events)
   helm/     reads Helm releases from Secrets and ConfigMaps (no GPUI)
   prometheus/  finds Prometheus, builds PromQL, runs queries (no GPUI)
@@ -28,8 +29,8 @@ crates/
 .agents/skills/   skills for agents (.claude/skills links here)
 ```
 
-Planned crates, added only when they get real code: `kinds` (per-kind specs),
-`term` (terminal pane), `editor` (YAML edit, diff, dry-run).
+Planned crates, added only when they get real code: `term` (terminal pane),
+`editor` (YAML edit, diff, dry-run).
 
 ## Commands
 

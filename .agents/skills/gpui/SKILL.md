@@ -109,12 +109,12 @@ self._events = Some(task);
 gpui_kit::actions!(pods, [SelectNext, SelectPrev, OpenLogs]);
 
 cx.bind_keys([
-    KeyBinding::new("j", SelectNext, Some("PodTable")),
-    KeyBinding::new("k", SelectPrev, Some("PodTable")),
+    KeyBinding::new("j", SelectNext, Some("ResourceTable")),
+    KeyBinding::new("k", SelectPrev, Some("ResourceTable")),
 ]);
 
 div()
-    .key_context("PodTable")
+    .key_context("ResourceTable")
     .track_focus(&self.focus_handle)
     .on_action(cx.listener(|this, _: &SelectNext, _window, cx| this.select_next(cx)))
 ```
@@ -193,7 +193,7 @@ Rules:
 ## Testing
 
 - Keep logic out of views so most tests are plain `#[test]`s on `model`,
-  `engine` and pure `ui` helpers (see `pod_table.rs`, `theme.rs`).
+  `engine` and pure `ui` helpers (see `resource_table.rs`, `theme.rs`).
 - View tests live in `crates/ui/tests/views.rs`. The harness in
   `tests/support/harness.rs` opens the workspace in a headless window, feeds
   it engine `Event`s and records the `Command`s it sends:

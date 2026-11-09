@@ -88,8 +88,9 @@ let stream = watcher(api, watcher::Config::default().page_size(500))
   Log them and report a degraded connection state; backoff keeps retrying.
 - `streaming_lists()` uses Kubernetes 1.27+ watch-list and saves memory on
   big clusters, but needs the server feature. Not on by default yet.
-- Secrets and ConfigMaps: use `metadata_watcher` so values never sit in
-  memory. It yields `PartialObjectMeta<K>`.
+- Secrets: watch `Api<PartialObjectMeta<Secret>>` with the normal `watcher`;
+  kube 5 sends metadata-only requests for it, so values never sit in memory.
+  (`metadata_watcher` is deprecated in kube 5.)
 
 ### Testing watches without a cluster
 
@@ -103,11 +104,30 @@ wait for `open_watches()` instead of asserting it right away.
 ### Snapshots for the UI
 
 Project rows on tokio, never in the view. Coalesce: wake on change, then
-send at most every 33 ms, and only if something changed. See
-`crates/engine/src/pods.rs` for the pattern (a `Notify` set by the stream, a
-loop that sleeps out the rest of the 33 ms window, then builds and sends).
-Age strings also change with time; re-project on a slow tick and send only
-if the rows differ.
+send at most every 33 ms, and only if something changed. See `run` in
+`crates/engine/src/hub.rs` for the pattern (a `watch` counter bumped by the
+stream, a loop that sleeps out the rest of the 33 ms window, then builds and
+sends). Age strings also change with time; re-project on a slow tick and
+send only if the rows differ.
+
+### Typed kinds and server-side tables
+
+Both produce `model::TableSnapshot` (`Event::Table`), keyed by
+`GroupVersionResource`, so the UI draws them the same way. Typed specs use
+`model::Column` with format hints `name`, `status` (coloured by
+`TableRow::health`) and `muted`. Neither sends a namespace column; the UI
+adds one when listing across namespaces. Kinds without a spec are served by
+`engine::tables::watch_table` once issue #19 routes them through the hub.
+
+### Adding a typed kind
+
+1. Add a variant to `model::resource::Kind` (names, API group and plural,
+   actions).
+2. Write a `Spec` in `crates/kinds` (columns, `row`, `details`) with tests.
+3. Add one arm to `spawn_watch` in `crates/engine/src/hub.rs` and one to
+   `owner_refs` in `owners.rs`.
+4. Add an icon in `ui::assets::kind_icon` and a place in the sidebar's
+   `GROUPS`.
 
 ## Logs
 

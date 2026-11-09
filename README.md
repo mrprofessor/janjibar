@@ -10,8 +10,9 @@ The name is a placeholder and will change.
 ## Status
 
 Early. The app lists every context from your kubeconfig files, connects to
-one, and shows its pods live. Nothing to install yet. See [PLAN.md](PLAN.md)
-for the plan.
+one, and shows 17 core kinds live (pods, workloads, services, config,
+storage, nodes, namespaces, events), with an inspector for the selected
+object. Nothing to install yet. See [PLAN.md](PLAN.md) for the plan.
 
 ## Run it
 
@@ -21,6 +22,8 @@ flakes. Rust comes from the dev shell.
 ```sh
 nix develop -c cargo run -p app --release
 nix develop -c cargo run -p app --release -- --context my-context   # connect at start
+nix develop -c cargo run -p app --release -- --context my-context --kind deployments
+nix develop -c cargo run -p app --release -- --context my-context --inspect shop/web-0
 ```
 
 No cluster? Run the fake one, which serves 41 pods and changes one every few

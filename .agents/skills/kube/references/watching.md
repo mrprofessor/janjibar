@@ -10,15 +10,18 @@
 - Rows are built, filtered and sorted on tokio. The UI gets at most 30
   snapshots a second and paints only visible rows.
 
-Today the engine runs one pod watch for the selected context. The hub replaces
-that in milestone 2.
+This is in place in `crates/engine/src/hub.rs`. The UI subscribes with
+`Command::Subscribe` (context, `GroupVersionResource`, namespace) and leaves
+with `Command::Unsubscribe`; the inspector holds a reference with
+`Command::Inspect`. Snapshots are `model::TableSnapshot`, with the watch
+state inside. Tests set a short linger through `engine::Options`.
 
 ## Memory
 
 - Strip `managedFields` with `.modify()` before the reflector stores objects.
   They are often the largest part of an object.
-- Metadata-only watches (`metadata_watcher`) for kinds whose bodies we do not
-  show in lists, and always for Secrets.
+- Metadata-only watches (`watcher` over `Api<PartialObjectMeta<K>>`) for kinds
+  whose bodies we do not show, and always for Secrets.
 - `page_size(500)` bounds each list response. `streaming_lists()` avoids the
   big initial list on servers that support it (1.27+ with the feature on,
   default on in newer releases). Try it in the 5,000-pod load test.
