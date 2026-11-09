@@ -1,0 +1,62 @@
+{
+  "name": "ledger",
+  "info": {
+    "first_deployed": "2026-09-14T20:12:44.918273+12:00",
+    "last_deployed": "2026-11-04T10:04:50.004188+13:00",
+    "deleted": "0001-01-01T00:00:00Z",
+    "description": "Upgrade complete",
+    "status": "deployed",
+    "notes": "The ledger is running.\n\nGet the admin URL:\n  kubectl -n payments port-forward svc/ledger 8080:80\n"
+  },
+  "chart": {
+    "metadata": {
+      "name": "ledger",
+      "home": "https://example.com/charts/ledger",
+      "version": "0.7.2",
+      "description": "A double-entry ledger service",
+      "maintainers": [{ "name": "payments-team", "email": "payments@example.com" }],
+      "apiVersion": "v2",
+      "appVersion": "1.19.4",
+      "type": "application"
+    },
+    "lock": null,
+    "templates": [
+      { "name": "templates/NOTES.txt", "data": "VGhlIGxlZGdlciBpcyBydW5uaW5nLgoKR2V0IHRoZSBhZG1pbiBVUkw6CiAga3ViZWN0bCAtbiB7eyAuUmVsZWFzZS5OYW1lc3BhY2UgfX0gcG9ydC1mb3J3YXJkIHN2Yy97eyAuUmVsZWFzZS5OYW1lIH19IDgwODA6ODAK" },
+      { "name": "templates/statefulset.yaml", "data": "YXBpVmVyc2lvbjogYXBwcy92MQpraW5kOiBTdGF0ZWZ1bFNldAptZXRhZGF0YToKICBuYW1lOiB7eyAuUmVsZWFzZS5OYW1lIH19CnNwZWM6CiAgcmVwbGljYXM6IHt7IC5WYWx1ZXMucmVwbGljYUNvdW50IH19Cg==" },
+      { "name": "templates/migrate-job.yaml", "data": "YXBpVmVyc2lvbjogYmF0Y2gvdjEKa2luZDogSm9iCm1ldGFkYXRhOgogIG5hbWU6IHt7IC5SZWxlYXNlLk5hbWUgfX0tbWlncmF0ZQogIGFubm90YXRpb25zOgogICAgaGVsbS5zaC9ob29rOiBwcmUtaW5zdGFsbCxwcmUtdXBncmFkZQo=" }
+    ],
+    "values": {
+      "image": { "repository": "example/ledger", "tag": "" },
+      "persistence": { "size": "8Gi" },
+      "replicaCount": 1
+    },
+    "schema": null,
+    "files": [
+      { "name": "README.md", "data": "IyBsZWRnZXIKCkEgZG91YmxlLWVudHJ5IGxlZGdlci4K" }
+    ]
+  },
+  "config": {
+    "image": { "tag": "1.19.4" },
+    "persistence": { "size": "20Gi" },
+    "replicaCount": 2
+  },
+  "manifest": "---\n# Source: ledger/templates/service.yaml\napiVersion: v1\nkind: Service\nmetadata:\n  name: ledger\n  labels:\n    app.kubernetes.io/managed-by: Helm\nspec:\n  ports:\n    - port: 80\n      targetPort: 8080\n---\n# Source: ledger/templates/statefulset.yaml\napiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: ledger\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: ledger\n          image: example/ledger:1.19.4\n          args: [\"--check\", \"a<b && b>c\"]\n",
+  "hooks": [
+    {
+      "name": "ledger-migrate",
+      "kind": "Job",
+      "path": "ledger/templates/migrate-job.yaml",
+      "manifest": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: ledger-migrate\n  annotations:\n    helm.sh/hook: pre-install,pre-upgrade\n",
+      "events": ["pre-install", "pre-upgrade"],
+      "last_run": {
+        "started_at": "2026-11-04T10:04:51.33012+13:00",
+        "completed_at": "2026-11-04T10:05:09.871642+13:00",
+        "phase": "Succeeded"
+      },
+      "weight": -5,
+      "delete_policies": ["before-hook-creation"]
+    }
+  ],
+  "version": 3,
+  "namespace": "payments"
+}
