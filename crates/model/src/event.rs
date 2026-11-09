@@ -3,8 +3,8 @@
 use std::fmt;
 
 use crate::{
-    Catalog, ContextName, KindCatalog, LogChunk, LogRequest, LogState, LogTabId, PodSnapshot,
-    TableSnapshot,
+    Catalog, ContextName, HelmCommand, HelmEvent, KindCatalog, LogChunk, LogRequest, LogState,
+    LogTabId, PodSnapshot, TableSnapshot,
 };
 
 /// What the UI asks the engine to do.
@@ -18,6 +18,8 @@ pub enum Command {
     OpenLogs(LogRequest),
     /// Close a log tab and stop its streams.
     CloseLogs(LogTabId),
+    /// Helm releases: watch them, or load one revision.
+    Helm(HelmCommand),
 }
 
 /// What the engine tells the UI.
@@ -47,6 +49,8 @@ pub enum Event {
         /// Its new state.
         state: LogState,
     },
+    /// Helm releases of the selected context, or one decoded revision.
+    Helm(HelmEvent),
 }
 
 /// Where a context's connection stands.

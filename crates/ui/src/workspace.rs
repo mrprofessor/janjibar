@@ -202,6 +202,8 @@ impl Workspace {
             }
             // The kinds sidebar and generic tables arrive with the watch hub.
             Event::Kinds(_) | Event::Table(_) => return,
+            // The Helm view arrives in a later commit.
+            Event::Helm(_) => return,
         }
         cx.notify();
     }

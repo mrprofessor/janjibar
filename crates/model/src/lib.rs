@@ -7,6 +7,7 @@ pub mod brand;
 mod catalog;
 mod event;
 mod helm;
+mod helm_feed;
 mod kinds;
 mod log;
 mod pod;
@@ -15,6 +16,9 @@ mod table;
 pub use catalog::{Catalog, ContextInfo, ContextName, SourceProblem};
 pub use event::{Command, ConnectError, ConnectionState, Event};
 pub use helm::{HelmChart, HelmRelease, HelmReleaseDetails, HelmRevision, HelmStatus, HelmStorage};
+pub use helm_feed::{
+    HelmChartInfo, HelmCommand, HelmEvent, HelmHistoryEntry, HelmReleaseKey, HelmRow, HelmSnapshot,
+};
 pub use kinds::{
     DiscoveryProblem, GroupVersionResource, KindCatalog, KindGroup, KindInfo, Scope, Verb, Verbs,
 };
