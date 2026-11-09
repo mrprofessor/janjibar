@@ -28,6 +28,12 @@ const MIN_BACKOFF: Duration = Duration::from_millis(250);
 /// Longest wait between reopen attempts for a container that looks alive.
 const MAX_BACKOFF: Duration = Duration::from_secs(5);
 
+/// Raw lines are cut at this many bytes while reading, and the rest of a
+/// long line is read and dropped, never kept. One huge line (a minified JSON
+/// blob, binary output) would otherwise grow a buffer without bound. Four
+/// times the pane's own cut, so cleaning out colour codes leaves enough.
+const MAX_RAW_LINE_BYTES: usize = 64 * 1024;
+
 /// What the pod watch last said about one container.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ContainerSeen {
@@ -293,7 +299,7 @@ impl Follower {
             match self.api.log_stream(&self.source.pod, &params).await {
                 Ok(reader) => {
                     last_notice = None;
-                    let mut lines = std::pin::pin!(raw_lines(reader));
+                    let mut lines = std::pin::pin!(raw_lines(reader, MAX_RAW_LINE_BYTES));
                     loop {
                         // Both branches are cancel safe: the line stream owns
                         // its buffer, and `changed` loses nothing.
@@ -365,8 +371,11 @@ impl Follower {
         !self.options.follow || self.options.previous
     }
 
-    fn parse(&self, raw: &[u8], resume: &mut Resume) -> Option<LogLine> {
-        let text = line::clean(raw);
+    fn parse(&self, raw: &RawLine, resume: &mut Resume) -> Option<LogLine> {
+        let mut text = line::clean(&raw.bytes);
+        if raw.cut {
+            line::mark_cut(&mut text);
+        }
         let (time, text) = line::split_timestamp(&text);
         // Every line carries a timestamp because we ask for them. If one
         // does not, place it after the last line instead of dropping it.
@@ -442,20 +451,83 @@ pub fn restart_time(restart: Restart, floor: Option<Timestamp>) -> Timestamp {
     }
 }
 
-/// Splits a byte stream into lines without failing on bad UTF-8.
+/// One line as read, before cleaning.
+#[derive(Debug, PartialEq, Eq)]
+struct RawLine {
+    /// The bytes, with the line ending when the line fit.
+    bytes: Vec<u8>,
+    /// The line was longer than the cap and its end was dropped.
+    cut: bool,
+}
+
+/// Splits a byte stream into lines without failing on bad UTF-8. Lines
+/// longer than `cap` bytes are cut (see [`MAX_RAW_LINE_BYTES`]).
 ///
 /// The stream owns the reader and the buffer, so dropping a pending `next()`
 /// loses nothing. An I/O error ends the stream after it is reported.
-fn raw_lines(reader: impl AsyncBufRead + Unpin) -> impl Stream<Item = std::io::Result<Vec<u8>>> {
-    futures::stream::unfold(Some(reader), |reader| async move {
+fn raw_lines(
+    reader: impl AsyncBufRead + Unpin,
+    cap: usize,
+) -> impl Stream<Item = std::io::Result<RawLine>> {
+    futures::stream::unfold(Some(reader), move |reader| async move {
         let mut reader = reader?;
-        let mut buf = Vec::new();
-        match reader.read_until(b'\n', &mut buf).await {
-            Ok(0) => None,
-            Ok(_) => Some((Ok(buf), Some(reader))),
+        match read_line(&mut reader, cap).await {
+            Ok(None) => None,
+            Ok(Some(line)) => Some((Ok(line), Some(reader))),
             Err(err) => Some((Err(err), None)),
         }
     })
+}
+
+/// Reads one line, keeping at most `cap` bytes of it. `None` at the end of
+/// the stream.
+async fn read_line(
+    reader: &mut (impl AsyncBufRead + Unpin),
+    cap: usize,
+) -> std::io::Result<Option<RawLine>> {
+    let mut line = RawLine {
+        bytes: Vec::new(),
+        cut: false,
+    };
+    let mut read_any = false;
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            // A last line without a line ending still counts.
+            return Ok(read_any.then(|| finish(line)));
+        }
+        read_any = true;
+        let newline = available.iter().position(|&b| b == b'\n');
+        // Bytes of this chunk that belong to the line, line ending included.
+        let used = newline.map_or(available.len(), |i| i + 1);
+        if !line.cut {
+            // The line ending does not count toward the cap.
+            let text = newline.unwrap_or(used);
+            let room = cap.saturating_sub(line.bytes.len());
+            if text > room {
+                line.bytes.extend_from_slice(&available[..room]);
+                line.cut = true;
+            } else {
+                line.bytes.extend_from_slice(&available[..used]);
+            }
+        }
+        reader.consume_unpin(used);
+        if newline.is_some() {
+            return Ok(Some(finish(line)));
+        }
+    }
+}
+
+/// Drops a character the cut split in two, so a cut line does not end in a
+/// replacement character.
+fn finish(mut line: RawLine) -> RawLine {
+    if line.cut
+        && let Err(err) = std::str::from_utf8(&line.bytes)
+        && err.error_len().is_none()
+    {
+        line.bytes.truncate(err.valid_up_to());
+    }
+    line
 }
 
 #[cfg(test)]
@@ -693,11 +765,24 @@ mod tests {
         );
     }
 
+    /// Reads `data` in chunks of `chunk` bytes, cutting lines at `cap`.
+    async fn read_all(data: &[u8], chunk: usize, cap: usize) -> Vec<RawLine> {
+        let reader = futures::io::BufReader::with_capacity(chunk, futures::io::Cursor::new(data));
+        raw_lines(reader, cap).map(Result::unwrap).collect().await
+    }
+
+    fn raw(bytes: &[u8], cut: bool) -> RawLine {
+        RawLine {
+            bytes: bytes.to_vec(),
+            cut,
+        }
+    }
+
     #[tokio::test]
     async fn raw_lines_split_on_newlines_and_keep_a_last_partial_line() {
         let data: &[u8] = b"one\ntwo\r\n\xffthree";
-        let lines: Vec<Vec<u8>> = raw_lines(futures::io::Cursor::new(data))
-            .map(Result::unwrap)
+        let lines: Vec<Vec<u8>> = raw_lines(futures::io::Cursor::new(data), MAX_RAW_LINE_BYTES)
+            .map(|line| line.unwrap().bytes)
             .collect()
             .await;
         assert_eq!(
@@ -708,5 +793,42 @@ mod tests {
                 b"\xffthree".to_vec()
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn a_long_line_is_cut_and_the_rest_skipped() {
+        // Three-byte reads make the long line span many chunks.
+        let lines = read_all(b"abcdefghij\nok\n", 3, 4).await;
+        assert_eq!(lines, [raw(b"abcd", true), raw(b"ok\n", false)]);
+    }
+
+    #[tokio::test]
+    async fn a_line_that_just_fits_is_kept_whole() {
+        let lines = read_all(b"abcd\r\nabcd\n", 2, 5).await;
+        assert_eq!(lines, [raw(b"abcd\r\n", false), raw(b"abcd\n", false)]);
+    }
+
+    #[tokio::test]
+    async fn a_last_line_without_an_ending_is_cut_too() {
+        let lines = read_all(b"abcdefgh", 8, 4).await;
+        assert_eq!(lines, [raw(b"abcd", true)]);
+    }
+
+    #[tokio::test]
+    async fn a_cut_never_splits_a_character() {
+        // 'é' is two bytes; a cap of 2 falls between them.
+        let lines = read_all("aéb\nok\n".as_bytes(), 16, 2).await;
+        assert_eq!(lines, [raw(b"a", true), raw(b"ok\n", false)]);
+    }
+
+    #[tokio::test]
+    async fn a_huge_line_keeps_only_the_cap() {
+        let mut data = vec![b'x'; 10 * MAX_RAW_LINE_BYTES];
+        data.extend_from_slice(b"\nafter\n");
+        let lines = read_all(&data, 8 * 1024, MAX_RAW_LINE_BYTES).await;
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].bytes.len(), MAX_RAW_LINE_BYTES);
+        assert!(lines[0].cut);
+        assert_eq!(lines[1], raw(b"after\n", false));
     }
 }
