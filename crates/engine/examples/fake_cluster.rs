@@ -112,6 +112,7 @@ async fn main() -> Result<(), String> {
     }
     api.add_crontab("batch-jobs", "nightly", "0 2 * * *", Some(1), 5 * 24 * 3600);
     api.add_crontab("batch-jobs", "every-minute", "* * * * */1", None, 120);
+    seed_other_kinds(&api, &namespaces);
 
     let kubeconfig = format!(
         "apiVersion: v1\nkind: Config\ncurrent-context: fake\nclusters:\n  - name: fake\n    cluster:\n      server: \"{}\"\nusers:\n  - name: fake\n    user: {{}}\ncontexts:\n  - name: fake\n    context:\n      cluster: fake\n      user: fake\n",
@@ -173,4 +174,103 @@ async fn main() -> Result<(), String> {
             live = Some(name);
         }
     }
+}
+
+/// A few objects of other kinds, so every sidebar group has something.
+fn seed_other_kinds(api: &FakeApi, namespaces: &[&str]) {
+    use std::collections::BTreeMap;
+
+    use k8s_openapi::api::apps::v1::{
+        Deployment, DeploymentSpec, DeploymentStatus, ReplicaSet, ReplicaSetSpec, ReplicaSetStatus,
+    };
+    use k8s_openapi::api::core::v1::{
+        ConfigMap, Namespace, Node, NodeCondition, NodeStatus, Secret, Service, ServicePort,
+        ServiceSpec,
+    };
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
+
+    let meta = |ns: Option<&str>, name: &str| ObjectMeta {
+        name: Some(name.to_owned()),
+        namespace: ns.map(str::to_owned),
+        ..ObjectMeta::default()
+    };
+    for name in ["fake-node-1", "fake-node-2"] {
+        api.put(&Node {
+            metadata: meta(None, name),
+            status: Some(NodeStatus {
+                conditions: Some(vec![NodeCondition {
+                    type_: "Ready".to_owned(),
+                    status: "True".to_owned(),
+                    ..NodeCondition::default()
+                }]),
+                ..NodeStatus::default()
+            }),
+            ..Node::default()
+        });
+    }
+    for ns in namespaces {
+        api.put(&Namespace {
+            metadata: meta(None, ns),
+            ..Namespace::default()
+        });
+    }
+    api.put(&Deployment {
+        metadata: meta(Some("shop"), "web"),
+        spec: DeploymentSpec {
+            replicas: Some(3),
+            ..DeploymentSpec::default()
+        },
+        status: Some(DeploymentStatus {
+            ready_replicas: Some(3),
+            updated_replicas: Some(3),
+            available_replicas: Some(3),
+            ..DeploymentStatus::default()
+        }),
+    });
+    api.put(&ReplicaSet {
+        metadata: ObjectMeta {
+            owner_references: Some(vec![OwnerReference {
+                api_version: "apps/v1".to_owned(),
+                kind: "Deployment".to_owned(),
+                name: "web".to_owned(),
+                uid: "uid-web".to_owned(),
+                controller: Some(true),
+                ..OwnerReference::default()
+            }]),
+            ..meta(Some("shop"), "web-7d9f8c6b5")
+        },
+        spec: ReplicaSetSpec {
+            replicas: Some(3),
+            ..ReplicaSetSpec::default()
+        },
+        status: Some(ReplicaSetStatus {
+            replicas: 3,
+            ready_replicas: Some(3),
+            ..ReplicaSetStatus::default()
+        }),
+    });
+    api.put(&Service {
+        metadata: meta(Some("shop"), "web"),
+        spec: Some(ServiceSpec {
+            cluster_ip: Some("10.96.12.4".to_owned()),
+            ports: Some(vec![ServicePort {
+                port: 80,
+                ..ServicePort::default()
+            }]),
+            ..ServiceSpec::default()
+        }),
+        ..Service::default()
+    });
+    api.put(&ConfigMap {
+        metadata: meta(Some("shop"), "web-config"),
+        data: Some(BTreeMap::from([(
+            "app.yaml".to_owned(),
+            "port: 8080\n".to_owned(),
+        )])),
+        ..ConfigMap::default()
+    });
+    api.put(&Secret {
+        metadata: meta(Some("shop"), "web-tls"),
+        ..Secret::default()
+    });
 }
