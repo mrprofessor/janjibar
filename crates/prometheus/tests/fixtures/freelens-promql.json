@@ -1,0 +1,2438 @@
+[
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (kubernetes_name)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[5m]))"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": false,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\"})"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum (node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\"}) by (instance)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[5m])) by(kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "nodes",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(container_cpu_usage_seconds_total{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(container_fs_usage_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "fsWrites",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_writes_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "fsReads",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_reads_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "networkReceive",
+  "nodes": false,
+  "promql": "sum(rate(container_network_receive_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pods",
+  "query": "networkTransmit",
+  "nodes": false,
+  "promql": "sum(rate(container_network_transmit_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pvc",
+  "query": "diskUsage",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_used_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "pvc",
+  "query": "diskCapacity",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "ingress",
+  "query": "bytesSentSuccess",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^2\\\\d*\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "ingress",
+  "query": "bytesSentFailure",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^5\\\\d*\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "ingress",
+  "query": "requestDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_request_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "ingress",
+  "query": "responseDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_response_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": true,
+  "promql": "sum(node_memory_MemTotal_bytes{kubernetes_node=~\"node-a|node-b\"} - (node_memory_MemFree_bytes{kubernetes_node=~\"node-a|node-b\"} + node_memory_Buffers_bytes{kubernetes_node=~\"node-a|node-b\"} + node_memory_Cached_bytes{kubernetes_node=~\"node-a|node-b\"})) by (kubernetes_name)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": true,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",instance=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": true,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\",kubernetes_node=~\"node-a|node-b\"}[5m]))"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": true,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\",instance=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",kubernetes_node=~\"node-a|node-b\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm14",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",kubernetes_node=~\"node-a|node-b\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\",kubernetes_node=~\"node-a|node-b\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[5m]))"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": false,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\"})"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\"}) by (instance)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[5m])) by(node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "nodes",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(container_cpu_usage_seconds_total{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(container_fs_usage_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "fsWrites",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_writes_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "fsReads",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_reads_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "networkReceive",
+  "nodes": false,
+  "promql": "sum(rate(container_network_receive_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pods",
+  "query": "networkTransmit",
+  "nodes": false,
+  "promql": "sum(rate(container_network_transmit_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[5m])) by (pod, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pvc",
+  "query": "diskUsage",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_used_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "pvc",
+  "query": "diskCapacity",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "ingress",
+  "query": "bytesSentSuccess",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^2\\\\d*\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "ingress",
+  "query": "bytesSentFailure",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^5\\\\d*\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "ingress",
+  "query": "requestDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_request_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "ingress",
+  "query": "responseDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_response_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[5m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": true,
+  "promql": "sum(node_memory_MemTotal_bytes{node=~\"node-a|node-b\"} - (node_memory_MemFree_bytes{node=~\"node-a|node-b\"} + node_memory_Buffers_bytes{node=~\"node-a|node-b\"} + node_memory_Cached_bytes{node=~\"node-a|node-b\"})) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": true,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",instance=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": true,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\",node=~\"node-a|node-b\"}[5m]))"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": true,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\",instance=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",node=~\"node-a|node-b\"}) by (node)"
+ },
+ {
+  "provider": "helm",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",node=~\"node-a|node-b\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\",node=~\"node-a|node-b\"}) by (node)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (kubernetes_name)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]))"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": false,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\"})"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum (node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\"}) by (instance)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m])) by(kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "nodes",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(container_cpu_usage_seconds_total{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(container_fs_usage_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "fsWrites",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_writes_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "fsReads",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_reads_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "networkReceive",
+  "nodes": false,
+  "promql": "sum(rate(container_network_receive_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pods",
+  "query": "networkTransmit",
+  "nodes": false,
+  "promql": "sum(rate(container_network_transmit_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pvc",
+  "query": "diskUsage",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_used_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "pvc",
+  "query": "diskCapacity",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "ingress",
+  "query": "bytesSentSuccess",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^2\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "ingress",
+  "query": "bytesSentFailure",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^5\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "ingress",
+  "query": "requestDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_request_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "ingress",
+  "query": "responseDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_response_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": true,
+  "promql": "sum(node_memory_MemTotal_bytes{kubernetes_node=~\"node-a|node-b\"} - (node_memory_MemFree_bytes{kubernetes_node=~\"node-a|node-b\"} + node_memory_Buffers_bytes{kubernetes_node=~\"node-a|node-b\"} + node_memory_Cached_bytes{kubernetes_node=~\"node-a|node-b\"})) by (kubernetes_name)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": true,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",instance=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": true,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\",kubernetes_node=~\"node-a|node-b\"}[1m]))"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": true,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\",instance=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",kubernetes_node=~\"node-a|node-b\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "lens",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",kubernetes_node=~\"node-a|node-b\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\",kubernetes_node=~\"node-a|node-b\"}) by (kubernetes_node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes))"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"\",image!=\"\"}) by (component)"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]))"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": false,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum((node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) * on (pod, namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\", container!=\"\"}) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]) * on (pod, namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "nodes",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum((node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) * on (pod, namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(container_cpu_usage_seconds_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\", resource=\"cpu\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\", resource=\"cpu\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\", resource=\"memory\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\", resource=\"memory\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(container_fs_usage_bytes{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "fsWrites",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_writes_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "fsReads",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_reads_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "networkReceive",
+  "nodes": false,
+  "promql": "sum(rate(container_network_receive_bytes_total{pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pods",
+  "query": "networkTransmit",
+  "nodes": false,
+  "promql": "sum(rate(container_network_transmit_bytes_total{pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pvc",
+  "query": "diskUsage",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_used_bytes{persistentvolumeclaim=\"data-0\", namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "pvc",
+  "query": "diskCapacity",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-0\", namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "ingress",
+  "query": "bytesSentSuccess",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^2\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "ingress",
+  "query": "bytesSentFailure",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^5\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "ingress",
+  "query": "requestDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_request_duration_seconds_sum{ingress=\"web\", namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "ingress",
+  "query": "responseDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_response_duration_seconds_sum{ingress=\"web\", namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": true,
+  "promql": "sum(node_memory_MemTotal_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) - (node_memory_MemFree_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) + node_memory_Buffers_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) + node_memory_Cached_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"})))"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": true,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"\",image!=\"\",instance=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": true,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]) * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}))"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": true,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}))"
+ },
+ {
+  "provider": "openshift",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}))"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes))"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"\",image!=\"\"}) by (component)"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]))"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": false,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum((node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) * on (pod, namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\", container!=\"\"}) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]) * on (pod, namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "nodes",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum((node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) * on (pod, namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info)) by (node)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(container_cpu_usage_seconds_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\", resource=\"cpu\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\", resource=\"cpu\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\", resource=\"memory\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\", resource=\"memory\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(container_fs_usage_bytes{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "fsWrites",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_writes_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "fsReads",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_reads_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "networkReceive",
+  "nodes": false,
+  "promql": "sum(rate(container_network_receive_bytes_total{pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pods",
+  "query": "networkTransmit",
+  "nodes": false,
+  "promql": "sum(rate(container_network_transmit_bytes_total{pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pvc",
+  "query": "diskUsage",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_used_bytes{persistentvolumeclaim=\"data-0\", namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "pvc",
+  "query": "diskCapacity",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-0\", namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "ingress",
+  "query": "bytesSentSuccess",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^2\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "ingress",
+  "query": "bytesSentFailure",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^5\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "ingress",
+  "query": "requestDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_request_duration_seconds_sum{ingress=\"web\", namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "ingress",
+  "query": "responseDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_response_duration_seconds_sum{ingress=\"web\", namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": true,
+  "promql": "sum(node_memory_MemTotal_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) - (node_memory_MemFree_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) + node_memory_Buffers_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) + node_memory_Cached_bytes * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"})))"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": true,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"\",image!=\"\",instance=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": true,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]) * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}))"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": true,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\",node=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}))"
+ },
+ {
+  "provider": "operator",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}) - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"} * on (pod,namespace) group_left(node) max without(pod_ip,host_ip) (kube_pod_info{node=~\"node-a|node-b\"}))"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (kubernetes_name)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m]))"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": false,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\"})"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum (node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "workloadMemoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\"}) by (instance)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "memoryCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "memoryAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\"}[1m])) by(node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "cpuCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "cpuAllocatableCapacity",
+  "nodes": false,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "fsSize",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "nodes",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "cpuUsage",
+  "nodes": false,
+  "promql": "sum(rate(container_cpu_usage_seconds_total{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "cpuRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "cpuLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"cpu\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "memoryUsage",
+  "nodes": false,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "memoryRequests",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_requests{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "memoryLimits",
+  "nodes": false,
+  "promql": "sum(kube_pod_container_resource_limits{pod=~\"web-1|web-2\",resource=\"memory\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "fsUsage",
+  "nodes": false,
+  "promql": "sum(container_fs_usage_bytes{container!=\"POD\",container!=\"\",image!=\"\",pod=~\"web-1|web-2\",namespace=\"shop\"}) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "fsWrites",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_writes_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "fsReads",
+  "nodes": false,
+  "promql": "sum(rate(container_fs_reads_bytes_total{container!=\"\",image!=\"\", pod=~\"web-1|web-2\", namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "networkReceive",
+  "nodes": false,
+  "promql": "sum(rate(container_network_receive_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pods",
+  "query": "networkTransmit",
+  "nodes": false,
+  "promql": "sum(rate(container_network_transmit_bytes_total{pod=~\"web-1|web-2\",namespace=\"shop\"}[1m])) by (pod, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pvc",
+  "query": "diskUsage",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_used_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "pvc",
+  "query": "diskCapacity",
+  "nodes": false,
+  "promql": "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-0\",namespace=\"shop\"}) by (persistentvolumeclaim, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "ingress",
+  "query": "bytesSentSuccess",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^2\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "ingress",
+  "query": "bytesSentFailure",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_bytes_sent_sum{ingress=\"web\",namespace=\"shop\",status=~\"^5\\\\d*\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "ingress",
+  "query": "requestDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_request_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "ingress",
+  "query": "responseDurationSeconds",
+  "nodes": false,
+  "promql": "sum(rate(nginx_ingress_controller_response_duration_seconds_sum{ingress=\"web\",namespace=\"shop\"}[1m])) by (ingress, namespace)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryUsage",
+  "nodes": true,
+  "promql": "sum(node_memory_MemTotal_bytes{node=~\"node-a|node-b\"} - (node_memory_MemFree_bytes{node=~\"node-a|node-b\"} + node_memory_Buffers_bytes{node=~\"node-a|node-b\"} + node_memory_Cached_bytes{node=~\"node-a|node-b\"})) by (kubernetes_name)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "workloadMemoryUsage",
+  "nodes": true,
+  "promql": "sum(container_memory_working_set_bytes{container!=\"POD\",container!=\"\",image!=\"\",instance=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "memoryAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"memory\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuUsage",
+  "nodes": true,
+  "promql": "sum(rate(node_cpu_seconds_total{mode=~\"user|system\",node=~\"node-a|node-b\"}[1m]))"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuRequests",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_requests{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuLimits",
+  "nodes": true,
+  "promql": "sum(kube_pod_container_resource_limits{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "cpuAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"cpu\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "podUsage",
+  "nodes": true,
+  "promql": "sum({__name__=~\"kubelet_running_pod_count|kubelet_running_pods\",instance=~\"node-a|node-b\"})"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "podCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_capacity{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "podAllocatableCapacity",
+  "nodes": true,
+  "promql": "sum(kube_node_status_allocatable{resource=\"pods\",node=~\"node-a|node-b\"}) by (component)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "fsSize",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",node=~\"node-a|node-b\"}) by (node)"
+ },
+ {
+  "provider": "stacklight",
+  "category": "cluster",
+  "query": "fsUsage",
+  "nodes": true,
+  "promql": "sum(node_filesystem_size_bytes{mountpoint=~\"/|/local\",node=~\"node-a|node-b\"} - node_filesystem_avail_bytes{mountpoint=~\"/|/local\",node=~\"node-a|node-b\"}) by (node)"
+ }
+]

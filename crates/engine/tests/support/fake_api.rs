@@ -21,6 +21,10 @@
 //!   with [`FakeApi::add_object`], can be listed and fetched, with label
 //!   selectors, paging and metadata-only responses.
 //!
+//! - Any other path can get canned answers with [`FakeApi::respond`], such
+//!   as a Prometheus behind the service proxy.
+//!
+//! Requests may carry a body (`Content-Length` only, no chunked uploads).
 //! Every request is logged so tests can check what was asked for. Everything
 //! else is a 404. There is no TLS and no auth.
 
@@ -29,7 +33,7 @@
     reason = "shared by tests and the fake_cluster example; each uses a subset"
 )]
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -87,6 +91,8 @@ struct State {
     requests: Vec<Request>,
     /// Container logs, by namespace, pod and container.
     logs: HashMap<LogKey, ContainerLog>,
+    /// Canned answers by exact path: status and body. The last one repeats.
+    responses: BTreeMap<String, VecDeque<(u16, String)>>,
 }
 
 /// (namespace, pod, container)
@@ -522,6 +528,17 @@ impl FakeApi {
         self.lock().requests.clone()
     }
 
+    /// Queues an answer for any request to `path` (no query string), whatever
+    /// the method. Answers are used in order and the last one repeats, so
+    /// `503` then `200` means "fail once, then work".
+    pub fn respond(&self, path: &str, status: u16, body: &str) {
+        self.lock()
+            .responses
+            .entry(path.to_owned())
+            .or_default()
+            .push_back((status, body.to_owned()));
+    }
+
     fn record(&self, state: &mut State, change: Change) {
         state.history.push(change.clone());
         // No receivers just means no watch is open yet.
@@ -818,27 +835,47 @@ fn columns(resource: Resource) -> Value {
 /// One request the server received.
 #[derive(Clone, Debug)]
 pub struct Request {
+    /// The method, such as `GET`.
+    pub method: String,
     /// The path, such as `/api/v1/secrets`.
     pub path: String,
     /// The raw query string, still percent-encoded.
     pub query: String,
     /// The `Accept` header, empty if none.
     pub accept: String,
+    /// Every header, names lowercased, in the order sent.
+    pub headers: Vec<(String, String)>,
+    /// The body, empty if none.
+    pub body: String,
 }
 
 impl Request {
-    fn parse(head: &str) -> Self {
-        let target = head
-            .lines()
-            .next()
-            .and_then(|line| line.split_whitespace().nth(1))
-            .unwrap_or("/");
+    fn parse(head: &str, body: String) -> Self {
+        let mut words = head.lines().next().unwrap_or_default().split_whitespace();
+        let method = words.next().unwrap_or("GET");
+        let target = words.next().unwrap_or("/");
         let (path, query) = target.split_once('?').unwrap_or((target, ""));
         Self {
+            method: method.to_owned(),
             path: path.to_owned(),
             query: query.to_owned(),
             accept: header(head, "accept"),
+            headers: headers(head),
+            body,
         }
+    }
+
+    /// A decoded parameter of a form-encoded body.
+    pub fn form_param(&self, key: &str) -> Option<String> {
+        find_param(&self.body, key)
+    }
+
+    /// A header's value, by case-insensitive name.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
     }
 
     /// True when the client asked for metadata only.
@@ -848,10 +885,7 @@ impl Request {
 
     /// A decoded query parameter.
     pub fn param(&self, key: &str) -> Option<String> {
-        self.query
-            .split('&')
-            .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
-            .map(percent_decode)
+        find_param(&self.query, key)
     }
 
     fn is_watch(&self) -> bool {
@@ -967,11 +1001,30 @@ fn route(path: &str) -> Route {
 async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
     let mut buf = Vec::new();
     loop {
-        let Some(head) = read_head(&mut stream, &mut buf).await else {
+        let Some((head, body)) = read_request(&mut stream, &mut buf).await else {
             return;
         };
-        let request = Request::parse(&head);
-        inner.lock().requests.push(request.clone());
+        let request = Request::parse(&head, body);
+        let canned = {
+            let mut state = inner.lock();
+            state.requests.push(request.clone());
+            state.responses.get_mut(&request.path).and_then(|queue| {
+                if queue.len() > 1 {
+                    queue.pop_front()
+                } else {
+                    queue.front().cloned()
+                }
+            })
+        };
+        if let Some((code, body)) = canned {
+            if write_response(&mut stream, &status_line(code), &body)
+                .await
+                .is_err()
+            {
+                return;
+            }
+            continue;
+        }
         let aggregated =
             request.wants_aggregated() && inner.aggregated_discovery.load(Ordering::SeqCst);
         let body = match route(&request.path) {
@@ -1577,6 +1630,37 @@ fn failure(code: u16, reason: &str) -> (&'static str, String) {
     (status, body.to_string())
 }
 
+fn find_param(encoded: &str, key: &str) -> Option<String> {
+    encoded
+        .split('&')
+        .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
+        .map(percent_decode)
+}
+
+fn status_line(code: u16) -> String {
+    let reason = match code {
+        200 => "OK",
+        400 => "Bad Request",
+        403 => "Forbidden",
+        404 => "Not Found",
+        422 => "Unprocessable Entity",
+        500 => "Internal Server Error",
+        503 => "Service Unavailable",
+        _ => "Unknown",
+    };
+    format!("{code} {reason}")
+}
+
+fn headers(head: &str) -> Vec<(String, String)> {
+    head.lines()
+        .skip(1)
+        .filter_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            Some((key.trim().to_ascii_lowercase(), value.trim().to_owned()))
+        })
+        .collect()
+}
+
 fn header(head: &str, name: &str) -> String {
     head.lines()
         .skip(1)
@@ -1614,18 +1698,35 @@ fn percent_decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Reads one request head. Request bodies are not expected (GET only).
-async fn read_head(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Option<String> {
-    loop {
+/// Reads one request: its head and a `Content-Length` body, if any.
+async fn read_request(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Option<(String, String)> {
+    let head = loop {
         if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
             let head = String::from_utf8_lossy(&buf[..end]).into_owned();
             buf.drain(..end + 4);
-            return Some(head);
+            break head;
         }
-        let mut chunk = [0u8; 4096];
-        match stream.read(&mut chunk).await {
-            Ok(0) | Err(_) => return None,
-            Ok(n) => buf.extend_from_slice(&chunk[..n]),
+        fill(stream, buf).await?;
+    };
+    let length = header(&head, "content-length")
+        .parse::<usize>()
+        .unwrap_or(0);
+    while buf.len() < length {
+        fill(stream, buf).await?;
+    }
+    let body = String::from_utf8_lossy(&buf[..length]).into_owned();
+    buf.drain(..length);
+    Some((head, body))
+}
+
+/// Reads more bytes into `buf`. `None` when the client hung up.
+async fn fill(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Option<()> {
+    let mut chunk = [0u8; 4096];
+    match stream.read(&mut chunk).await {
+        Ok(0) | Err(_) => None,
+        Ok(n) => {
+            buf.extend_from_slice(&chunk[..n]);
+            Some(())
         }
     }
 }
