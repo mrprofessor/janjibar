@@ -326,6 +326,26 @@ async fn reads_the_previous_container_once() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_huge_line_is_cut_while_reading_and_marked() {
+    let api = FakeApi::start("127.0.0.1:0").await.unwrap();
+    api.add_pod("shop", "web-1", HOUR);
+    // About 80 KiB of colour codes, then text. Cleaning alone would strip the
+    // codes and keep "TAIL"; the reader must stop before it and mark the cut.
+    let huge = format!("{}TAIL", "\u{1b}[0m".repeat(20_000));
+    api.log("shop", "web-1", "app", &huge);
+    api.log("shop", "web-1", "app", "after");
+
+    let options = LogOptions {
+        follow: false,
+        ..LogOptions::default()
+    };
+    let (mut tab, task) = Tab::open(&api, request(pod_target("shop", "web-1"), options));
+    tab.until("done", |t| t.state == Some(LogState::Done)).await;
+    assert_eq!(tab.texts(), ["…", "after"]);
+    timeout(WAIT, task).await.unwrap().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_missing_pod_reports_no_pods() {
     let api = FakeApi::start("127.0.0.1:0").await.unwrap();
     let (mut tab, task) = Tab::open(
