@@ -183,7 +183,12 @@ impl TableDelegate for PodTable {
         _: &mut Window,
         _: &mut Context<TableState<Self>>,
     ) -> Stateful<Div> {
-        div().id(("pod", row_ix)).rounded(px(theme::ROW_RADIUS))
+        let tr = div().id(("pod", row_ix)).rounded(px(theme::ROW_RADIUS));
+        match self.rows.get(row_ix) {
+            // View tests find rows by name. A no-op outside test builds.
+            Some(pod) => tr.debug_selector(|| format!("pod-{}/{}", pod.namespace, pod.name)),
+            None => tr,
+        }
     }
 
     fn render_td(
