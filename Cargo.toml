@@ -41,6 +41,9 @@ base64 = "0.23"
 flate2 = "1"
 # YAML. kube 5 uses it too. serde_yml and serde_yaml are banned in deny.toml.
 serde-saphyr = "2.1"
+# Instants. k8s-openapi and kube already use jiff; crates that convert to
+# local time add the `tz-system` and `tzdb-zoneinfo` features.
+jiff = { version = "0.2.41", default-features = false, features = ["std"] }
 
 # Tests.
 tempfile = "3"

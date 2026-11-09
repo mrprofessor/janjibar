@@ -8,6 +8,7 @@ mod catalog;
 mod event;
 mod helm;
 mod kinds;
+mod log;
 mod pod;
 mod table;
 
@@ -16,6 +17,10 @@ pub use event::{Command, ConnectError, ConnectionState, Event};
 pub use helm::{HelmChart, HelmRelease, HelmReleaseDetails, HelmRevision, HelmStatus, HelmStorage};
 pub use kinds::{
     DiscoveryProblem, GroupVersionResource, KindCatalog, KindGroup, KindInfo, Scope, Verb, Verbs,
+};
+pub use log::{
+    Clock, Containers, DEFAULT_LOG_CAPACITY, DEFAULT_TAIL_LINES, LineKind, LogBuffer, LogChange,
+    LogChunk, LogLevel, LogLine, LogOptions, LogRequest, LogSource, LogState, LogTabId, LogTarget,
 };
 pub use pod::{Health, PodRow, PodSnapshot, Ready};
 pub use table::{Column, ColumnType, TableRow, TableSnapshot};
