@@ -7,9 +7,11 @@
 pub mod age;
 pub mod catalog;
 mod client;
+pub mod discovery;
 mod errors;
 pub mod pods;
 pub mod shell_env;
+pub mod tables;
 
 use std::sync::Arc;
 
@@ -133,7 +135,11 @@ impl Engine {
                 state: ConnectionState::Connecting,
             });
             match clients.get(&context, &kubeconfig).await {
-                Ok(client) => pods::watch_pods(context, client, events).await,
+                Ok(client) => {
+                    let kinds =
+                        discovery::send_kinds(context.clone(), client.clone(), events.clone());
+                    tokio::join!(kinds, pods::watch_pods(context, client, events));
+                }
                 Err(err) => {
                     tracing::warn!(%context, "could not connect: {err}");
                     let _ = events.send(Event::Connection {
