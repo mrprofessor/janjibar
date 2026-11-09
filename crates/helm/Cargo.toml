@@ -11,6 +11,7 @@ model.workspace = true
 kube.workspace = true
 k8s-openapi.workspace = true
 futures.workspace = true
+tokio.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true

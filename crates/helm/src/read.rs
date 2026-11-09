@@ -47,6 +47,18 @@ pub enum ReadError {
         /// The record's object name.
         object: String,
     },
+    /// The decode task did not finish: it panicked, or the runtime is
+    /// shutting down.
+    #[error("decoding `{namespace}/{object}` was interrupted")]
+    Interrupted {
+        /// The record's namespace.
+        namespace: String,
+        /// The record's object name.
+        object: String,
+        /// Why the task ended.
+        #[source]
+        source: tokio::task::JoinError,
+    },
     /// The record exists but its payload is unreadable.
     #[error("`{namespace}/{object}` is not a readable Helm release")]
     Decode {
@@ -166,6 +178,10 @@ pub async fn history(
 
 /// Fetches one revision's record and decodes its payload.
 ///
+/// The fetch runs on the async worker. Decoding (unpacking up to 64 MiB of
+/// gzip, then parsing JSON) runs on tokio's blocking pool, so a big release
+/// never stalls the watches that share the worker.
+///
 /// Fields an old payload leaves out (namespace, name, revision) are filled
 /// in from `revision`.
 pub async fn get(
@@ -179,24 +195,31 @@ pub async fn get(
         object: object.clone(),
         source,
     };
-    let decoded = match revision.storage {
+    let record = match revision.storage {
         HelmStorage::Secret => Api::<Secret>::namespaced(client.clone(), namespace)
             .get_opt(&object)
             .await
             .map_err(fetch_error)?
-            .map(|secret| decode_secret(&secret)),
+            .map(Record::Secret),
         HelmStorage::ConfigMap => Api::<ConfigMap>::namespaced(client.clone(), namespace)
             .get_opt(&object)
             .await
             .map_err(fetch_error)?
-            .map(|config_map| decode_config_map(&config_map)),
+            .map(Record::ConfigMap),
     };
-    let Some(decoded) = decoded else {
+    let Some(record) = record else {
         return Err(ReadError::NotFound {
             namespace: namespace.to_owned(),
             object,
         });
     };
+    let decoded = tokio::task::spawn_blocking(move || record.decode())
+        .await
+        .map_err(|source| ReadError::Interrupted {
+            namespace: namespace.to_owned(),
+            object: object.clone(),
+            source,
+        })?;
     let mut details = decoded.map_err(|source| ReadError::Decode {
         namespace: namespace.to_owned(),
         object: object.clone(),
@@ -212,6 +235,21 @@ pub async fn get(
         details.revision = revision.revision;
     }
     Ok(details)
+}
+
+/// A fetched record, not yet decoded.
+enum Record {
+    Secret(Secret),
+    ConfigMap(ConfigMap),
+}
+
+impl Record {
+    fn decode(&self) -> Result<HelmReleaseDetails, DecodeError> {
+        match self {
+            Self::Secret(secret) => decode_secret(secret),
+            Self::ConfigMap(config_map) => decode_config_map(config_map),
+        }
+    }
 }
 
 fn scoped<K>(client: &Client, namespace: Option<&str>) -> Api<K>
