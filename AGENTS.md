@@ -22,6 +22,7 @@ crates/
   model/    plain data that crosses the bridge (rows, catalog, events)
   helm/     reads Helm releases from Secrets and ConfigMaps (no GPUI)
   prometheus/  finds Prometheus, builds PromQL, runs queries (no GPUI)
+  resource-metrics/  polls metrics.k8s.io usage while views need it (no GPUI)
   bridge/   vendored gpui_tokio; tokio <-> GPUI glue
   ui/       GPUI views: shell, sidebar, tabs, tables, theme, fonts
 .agents/skills/   skills for agents (.claude/skills links here)
