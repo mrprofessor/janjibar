@@ -170,7 +170,10 @@ impl fmt::Debug for PrometheusUrl {
         let header_names: Vec<&str> = self.headers.iter().map(|(k, _)| k.as_str()).collect();
         f.debug_struct("PrometheusUrl")
             .field("url", &self.url)
-            .field("bearer_token", &self.bearer_token.as_ref().map(|_| "<redacted>"))
+            .field(
+                "bearer_token",
+                &self.bearer_token.as_ref().map(|_| "<redacted>"),
+            )
             .field("headers", &header_names)
             .finish()
     }
@@ -519,8 +522,17 @@ mod tests {
             sorted.sort_unstable();
             sorted.windows(2).all(|w| w[0] != w[1])
         }
-        assert!(unique(&ClusterMetric::ALL.iter().map(|m| m.key()).collect::<Vec<_>>()));
-        assert!(unique(&NodeMetric::ALL.iter().map(|m| m.key()).collect::<Vec<_>>()));
-        assert!(unique(&PodMetric::ALL.iter().map(|m| m.key()).collect::<Vec<_>>()));
+        assert!(unique(
+            &ClusterMetric::ALL
+                .iter()
+                .map(|m| m.key())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &NodeMetric::ALL.iter().map(|m| m.key()).collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &PodMetric::ALL.iter().map(|m| m.key()).collect::<Vec<_>>()
+        ));
     }
 }
