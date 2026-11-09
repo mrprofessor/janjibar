@@ -9,14 +9,16 @@ pub mod catalog;
 mod client;
 pub mod discovery;
 mod errors;
+pub mod logs;
 pub mod pods;
 pub mod shell_env;
 pub mod tables;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use kube::config::Kubeconfig;
-use model::{Command, ConnectError, ConnectionState, ContextName, Event};
+use model::{Command, ConnectError, ConnectionState, ContextName, Event, LogTabId};
 use tokio::sync::mpsc;
 
 pub use catalog::KubeconfigSources;
@@ -64,6 +66,8 @@ struct Engine {
     /// The selected context's connection and pod watch. Replacing it drops
     /// the old task, which stops the old watch.
     active: Option<AbortOnDrop<()>>,
+    /// Open log tabs. Removing one drops its task and stops its streams.
+    logs: HashMap<LogTabId, AbortOnDrop<()>>,
 }
 
 async fn run(
@@ -78,12 +82,27 @@ async fn run(
         clients: ClientPool::default(),
         catalog: model::Catalog::default(),
         active: None,
+        logs: HashMap::new(),
     };
     engine.reload().await;
     while let Some(command) = commands.recv().await {
         match command {
             Command::ReloadCatalog => engine.reload().await,
             Command::SelectContext(name) => engine.select(name),
+            Command::OpenLogs(request) => {
+                let tab = request.tab;
+                let kubeconfig = Arc::clone(&engine.kubeconfig);
+                let task = logs::open(
+                    request,
+                    engine.clients.clone(),
+                    kubeconfig,
+                    engine.events.clone(),
+                );
+                engine.logs.insert(tab, task);
+            }
+            Command::CloseLogs(tab) => {
+                engine.logs.remove(&tab);
+            }
         }
     }
     tracing::debug!("engine stopped: every handle was dropped");
