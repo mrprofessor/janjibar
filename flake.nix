@@ -25,6 +25,8 @@
             rustfmt
             rust-analyzer
             cargo-deny
+            # The term crate builds libghostty-vt from Ghostty's source with Zig.
+            zig_0_17
           ];
           RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
           shellHook = ''

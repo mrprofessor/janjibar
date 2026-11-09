@@ -21,6 +21,40 @@ crates/ui/assets/icons/
   (https://lucide.dev), copied from gpui-kit-assets 0.9.0.
   Licensed under the ISC License. See LICENSE there.
 
+crates/term/
+  Forked from the terminal and shell modules of gpui-cn 0.8.0
+  (https://github.com/prabirshrestha/gpui-cn, commit
+  e49d909b2ceae040714aa53cd38f97faa4f85cd2).
+  Licensed under the Apache License, Version 2.0.
+  gpui-cn's terminal is derived from Herdr
+  (https://github.com/herdrdev/herdr-app).
+  Licensed under the Apache License, Version 2.0.
+  Its block, decoration and element structure are adapted from Muxy v2,
+  Copyright (c) 2026 Muxy. Licensed under the MIT License. See
+  crates/term/licenses/muxy-MIT.txt.
+
+libghostty-vt, built from source by the ghostty-vt crate and linked into
+the term crate
+  Ghostty (https://github.com/ghostty-org/ghostty), commit
+  83fb95624b0439ee660c2679b43b38c8b63769cd.
+  Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors.
+  Licensed under the MIT License. See crates/term/licenses/ghostty-MIT.txt.
+  The library bundles:
+  - simdutf (https://github.com/simdutf/simdutf), Copyright The simdutf
+    authors. Dual licensed; used under the Apache License, Version 2.0.
+  - Highway (https://github.com/google/highway), Copyright The Highway
+    Project Authors. Dual licensed; used under the Apache License,
+    Version 2.0.
+  - Wuffs (https://github.com/google/wuffs), Copyright The Wuffs Authors.
+    Dual licensed; used under the Apache License, Version 2.0.
+  - uucode (https://github.com/jacobsandlund/uucode), Copyright (c) 2026
+    Jacob Sandlund. Licensed under the MIT License. See
+    crates/term/licenses/uucode-MIT.md. Its tables come from the Unicode
+    Character Database, under the Unicode License v3.
+  - Zig's compiler_rt (https://ziglang.org), Copyright (c) Zig
+    contributors. Licensed under the MIT License. See
+    crates/term/licenses/zig-MIT.txt.
+
 crates/prometheus/
   Prometheus providers, service lookup, PromQL and the query path ported from
   Freelens

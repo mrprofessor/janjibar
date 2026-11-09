@@ -33,6 +33,10 @@ exceptions = [
     # we do not modify them: cbindgen is a build tool, option-ext comes via dirs.
     { allow = ["MPL-2.0"], crate = "cbindgen" },
     { allow = ["MPL-2.0"], crate = "option-ext" },
+    # Mozilla's root certificates as data, under a permissive data licence.
+    # Only ghostty-vt-sys's build script uses them, to download Ghostty's
+    # source over HTTPS; nothing ships in the app.
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
 ]
 
 [bans]
