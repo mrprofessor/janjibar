@@ -32,8 +32,9 @@ thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-serde_json = "1"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+http = "1"
 
 # Helm release payloads: base64 of gzip of JSON. Same base64 major as kube.
 base64 = "0.23"

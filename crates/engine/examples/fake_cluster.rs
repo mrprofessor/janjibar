@@ -1,7 +1,8 @@
 //! A fake cluster for running the app without Kubernetes.
 //!
-//! Serves pods over plain HTTP, writes a kubeconfig that points at it, and
-//! adds then deletes a pod every few seconds so the UI has something to show.
+//! Serves pods and a custom resource (`crontabs.stable.example.com`) over
+//! plain HTTP, writes a kubeconfig that points at it, and adds then deletes a
+//! pod every few seconds so the UI has something to show.
 //!
 //! ```sh
 //! nix develop -c cargo run -p engine --example fake_cluster -- --pods 41 --kubeconfig /tmp/fake.yaml
@@ -69,6 +70,8 @@ async fn main() -> Result<(), String> {
         let age = 60 * i64::try_from(i * 97 % 6000).unwrap_or(0);
         api.add_pod(ns, &format!("{ns}-app-{i:04}"), age);
     }
+    api.add_crontab("batch-jobs", "nightly", "0 2 * * *", Some(1), 5 * 24 * 3600);
+    api.add_crontab("batch-jobs", "every-minute", "* * * * */1", None, 120);
 
     let kubeconfig = format!(
         "apiVersion: v1\nkind: Config\ncurrent-context: fake\nclusters:\n  - name: fake\n    cluster:\n      server: \"{}\"\nusers:\n  - name: fake\n    user: {{}}\ncontexts:\n  - name: fake\n    context:\n      cluster: fake\n      user: fake\n",
