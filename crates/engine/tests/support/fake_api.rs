@@ -11,6 +11,12 @@
 //!   `continue`.
 //! - Watches (`watch=true`) stream events with chunked encoding, replayed
 //!   from the requested resourceVersion, as objects or as Tables.
+//! - Pod lists and watches honour `labelSelector` (equality only) and
+//!   `fieldSelector=metadata.name=...`.
+//! - Pod logs (`/api/v1/namespaces/{ns}/pods/{name}/log`) behave like the
+//!   kubelet's: `container`, `follow`, `previous`, `timestamps`, `tailLines`
+//!   and `sinceTime` (whole seconds). A followed stream ends when the
+//!   container crashes; see [`FakeApi::crash`] and [`FakeApi::start_container`].
 //! - Other namespaced core objects, such as `secrets` and `configmaps`, added
 //!   with [`FakeApi::add_object`], can be listed and fetched, with label
 //!   selectors, paging and metadata-only responses.
@@ -23,14 +29,14 @@
     reason = "shared by tests and the fake_cluster example; each uses a subset"
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use k8s_openapi::api::core::v1::{
-    Container, ContainerState, ContainerStateRunning, ContainerStatus, Pod, PodCondition, PodSpec,
-    PodStatus,
+    Container, ContainerState, ContainerStateRunning, ContainerStateTerminated,
+    ContainerStateWaiting, ContainerStatus, Pod, PodCondition, PodSpec, PodStatus,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
 use k8s_openapi::jiff::{Timestamp, ToSpan as _};
@@ -61,6 +67,9 @@ struct Inner {
     aggregated_discovery: AtomicBool,
     /// Largest page the server returns, whatever the client asks. 0 = no cap.
     page_cap: AtomicUsize,
+    logs: broadcast::Sender<LogEvent>,
+    open_log_streams: AtomicUsize,
+    log_requests: AtomicUsize,
 }
 
 #[derive(Default)]
@@ -76,6 +85,35 @@ struct State {
     forbidden: BTreeSet<String>,
     /// Every request so far, oldest first.
     requests: Vec<Request>,
+    /// Container logs, by namespace, pod and container.
+    logs: HashMap<LogKey, ContainerLog>,
+}
+
+/// (namespace, pod, container)
+type LogKey = (String, String, String);
+
+#[derive(Clone)]
+struct LogEvent {
+    key: LogKey,
+    instance: u32,
+    kind: LogEventKind,
+}
+
+#[derive(Clone)]
+enum LogEventKind {
+    /// A line was added at this index of the instance's log.
+    Line(usize, Timestamp, String),
+    /// The instance stopped, or its streams were cut; followed streams end.
+    Ended,
+}
+
+#[derive(Default)]
+struct ContainerLog {
+    /// Starts at 0 and goes up by one on each start.
+    instance: u32,
+    current: Vec<(Timestamp, String)>,
+    previous: Option<Vec<(Timestamp, String)>>,
+    running: bool,
 }
 
 /// The kinds the fake serves.
@@ -125,6 +163,9 @@ impl FakeApi {
             lists: AtomicUsize::new(0),
             aggregated_discovery: AtomicBool::new(true),
             page_cap: AtomicUsize::new(0),
+            logs: broadcast::channel(16_384).0,
+            open_log_streams: AtomicUsize::new(0),
+            log_requests: AtomicUsize::new(0),
         });
         let accept_inner = Arc::clone(&inner);
         tokio::spawn(async move {
@@ -167,16 +208,48 @@ impl FakeApi {
         self.inner.page_cap.store(cap, Ordering::SeqCst);
     }
 
+    /// Followed log streams currently open.
+    pub fn open_log_streams(&self) -> usize {
+        self.inner.open_log_streams.load(Ordering::SeqCst)
+    }
+
+    /// Log requests served so far, including failed ones.
+    pub fn log_requests(&self) -> usize {
+        self.inner.log_requests.load(Ordering::SeqCst)
+    }
+
     /// Number of pods the server holds.
     pub fn pod_count(&self) -> usize {
         self.lock().pods.len()
     }
 
-    /// Adds (or replaces) a running pod created `age` ago.
+    /// Adds (or replaces) a running pod with one container, `app`, created
+    /// `age_seconds` ago.
     pub fn add_pod(&self, namespace: &str, name: &str, age_seconds: i64) {
+        self.add_pod_with(namespace, name, age_seconds, &[], &["app"]);
+    }
+
+    /// Adds (or replaces) a running pod with these labels and containers.
+    pub fn add_pod_with(
+        &self,
+        namespace: &str,
+        name: &str,
+        age_seconds: i64,
+        labels: &[(&str, &str)],
+        containers: &[&str],
+    ) {
         let mut state = self.lock();
         let rv = next_rv(&mut state);
-        let pod = running_pod(namespace, name, age_seconds, rv);
+        let pod = running_pod(namespace, name, age_seconds, rv, labels, containers);
+        for container in containers {
+            state.logs.insert(
+                log_key(namespace, name, container),
+                ContainerLog {
+                    running: true,
+                    ..ContainerLog::default()
+                },
+            );
+        }
         state
             .pods
             .insert((namespace.to_owned(), name.to_owned()), pod.clone());
@@ -209,6 +282,17 @@ impl FakeApi {
         let Some(mut pod) = state.pods.remove(&(namespace.to_owned(), name.to_owned())) else {
             return;
         };
+        let keys: Vec<LogKey> = state
+            .logs
+            .keys()
+            .filter(|(ns, pod, _)| ns == namespace && pod == name)
+            .cloned()
+            .collect();
+        for key in keys {
+            if let Some(log) = state.logs.remove(&key) {
+                self.send_log(key, log.instance, LogEventKind::Ended);
+            }
+        }
         let rv = next_rv(&mut state);
         pod.metadata.resource_version = Some(rv.to_string());
         self.record(&mut state, pod_change(rv, "DELETED", &pod));
@@ -270,6 +354,147 @@ impl FakeApi {
         self.record(&mut state, crontab_change(rv, "DELETED", &crontab));
     }
 
+    /// Writes a log line now.
+    pub fn log(&self, namespace: &str, pod: &str, container: &str, text: &str) {
+        self.log_at(namespace, pod, container, Timestamp::now(), text);
+    }
+
+    /// Writes a log line with a given timestamp to the running container.
+    /// Lines for a container that is not running are dropped, like output
+    /// from a process that is gone.
+    pub fn log_at(&self, namespace: &str, pod: &str, container: &str, time: Timestamp, text: &str) {
+        let mut state = self.lock();
+        let key = log_key(namespace, pod, container);
+        let Some(log) = state.logs.get_mut(&key) else {
+            return;
+        };
+        if !log.running {
+            return;
+        }
+        log.current.push((time, text.to_owned()));
+        let ix = log.current.len() - 1;
+        let instance = log.instance;
+        self.send_log(key, instance, LogEventKind::Line(ix, time, text.to_owned()));
+    }
+
+    /// The container exits: followed streams end, and the pod shows it
+    /// waiting in `CrashLoopBackOff` with the old container as its last state.
+    pub fn crash(&self, namespace: &str, pod: &str, container: &str) {
+        let mut state = self.lock();
+        let key = log_key(namespace, pod, container);
+        let Some(log) = state.logs.get_mut(&key) else {
+            return;
+        };
+        if !log.running {
+            return;
+        }
+        log.running = false;
+        log.previous = Some(std::mem::take(&mut log.current));
+        let instance = log.instance;
+        self.send_log(key, instance, LogEventKind::Ended);
+        let id = container_id(namespace, pod, container, instance);
+        self.update_status(&mut state, namespace, pod, container, |status| {
+            status.ready = false;
+            status.started = Some(false);
+            status.last_state = Some(ContainerState {
+                terminated: Some(ContainerStateTerminated {
+                    container_id: Some(id.clone()),
+                    exit_code: 1,
+                    reason: Some("Error".to_owned()),
+                    ..ContainerStateTerminated::default()
+                }),
+                ..ContainerState::default()
+            });
+            status.state = Some(ContainerState {
+                waiting: Some(ContainerStateWaiting {
+                    reason: Some("CrashLoopBackOff".to_owned()),
+                    message: Some("back-off restarting failed container".to_owned()),
+                }),
+                ..ContainerState::default()
+            });
+        });
+    }
+
+    /// A crashed container starts again: a new container ID, one more
+    /// restart, an empty log.
+    pub fn start_container(&self, namespace: &str, pod: &str, container: &str) {
+        let mut state = self.lock();
+        let Some(log) = state.logs.get_mut(&log_key(namespace, pod, container)) else {
+            return;
+        };
+        if log.running {
+            return;
+        }
+        log.instance += 1;
+        log.running = true;
+        let instance = log.instance;
+        let id = container_id(namespace, pod, container, instance);
+        let now = Timestamp::now();
+        self.update_status(&mut state, namespace, pod, container, |status| {
+            status.ready = true;
+            status.started = Some(true);
+            status.restart_count += 1;
+            status.container_id = Some(id.clone());
+            status.state = Some(ContainerState {
+                running: Some(ContainerStateRunning {
+                    started_at: Some(Time(now)),
+                }),
+                ..ContainerState::default()
+            });
+        });
+    }
+
+    /// Ends followed log streams while the container keeps running, like a
+    /// dropped connection or an API server timeout.
+    pub fn cut_log_streams(&self, namespace: &str, pod: &str, container: &str) {
+        let state = self.lock();
+        let key = log_key(namespace, pod, container);
+        if let Some(log) = state.logs.get(&key) {
+            self.send_log(key, log.instance, LogEventKind::Ended);
+        }
+    }
+
+    /// Crash, then start again right away.
+    pub fn restart(&self, namespace: &str, pod: &str, container: &str) {
+        self.crash(namespace, pod, container);
+        self.start_container(namespace, pod, container);
+    }
+
+    fn update_status(
+        &self,
+        state: &mut State,
+        namespace: &str,
+        pod: &str,
+        container: &str,
+        change: impl FnOnce(&mut ContainerStatus),
+    ) {
+        let rv = next_rv(state);
+        let Some(pod) = state.pods.get_mut(&(namespace.to_owned(), pod.to_owned())) else {
+            return;
+        };
+        pod.metadata.resource_version = Some(rv.to_string());
+        let Some(status) = pod
+            .status
+            .as_mut()
+            .and_then(|s| s.container_statuses.as_mut())
+            .and_then(|list| list.iter_mut().find(|s| s.name == container))
+        else {
+            return;
+        };
+        change(status);
+        let change = pod_change(rv, "MODIFIED", pod);
+        self.record(state, change);
+    }
+
+    fn send_log(&self, key: LogKey, instance: u32, kind: LogEventKind) {
+        // No receivers just means no log is being followed.
+        let _ = self.inner.logs.send(LogEvent {
+            key,
+            instance,
+            kind,
+        });
+    }
+
     /// Adds (or replaces) a namespaced core object, such as a Secret or
     /// `ConfigMap`. `plural` is its URL segment (`secrets`, `configmaps`).
     /// The namespace and name come from the object's metadata.
@@ -319,8 +544,27 @@ fn next_rv(state: &mut State) -> u64 {
     state.resource_version
 }
 
-fn running_pod(namespace: &str, name: &str, age_seconds: i64, rv: u64) -> Pod {
+fn log_key(namespace: &str, pod: &str, container: &str) -> LogKey {
+    (namespace.to_owned(), pod.to_owned(), container.to_owned())
+}
+
+fn container_id(namespace: &str, pod: &str, container: &str, instance: u32) -> String {
+    format!("containerd://{namespace}-{pod}-{container}-{instance}")
+}
+
+fn running_pod(
+    namespace: &str,
+    name: &str,
+    age_seconds: i64,
+    rv: u64,
+    labels: &[(&str, &str)],
+    containers: &[&str],
+) -> Pod {
     let created = Timestamp::now() - age_seconds.seconds();
+    let labels: BTreeMap<String, String> = labels
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
     Pod {
         metadata: ObjectMeta {
             name: Some(name.to_owned()),
@@ -328,14 +572,18 @@ fn running_pod(namespace: &str, name: &str, age_seconds: i64, rv: u64) -> Pod {
             uid: Some(format!("uid-{namespace}-{name}")),
             resource_version: Some(rv.to_string()),
             creation_timestamp: Some(Time(created)),
+            labels: (!labels.is_empty()).then_some(labels),
             ..ObjectMeta::default()
         },
         spec: Some(PodSpec {
-            containers: vec![Container {
-                name: "app".to_owned(),
-                image: Some("example/app:1".to_owned()),
-                ..Container::default()
-            }],
+            containers: containers
+                .iter()
+                .map(|c| Container {
+                    name: (*c).to_owned(),
+                    image: Some("example/app:1".to_owned()),
+                    ..Container::default()
+                })
+                .collect(),
             node_name: Some("fake-node-1".to_owned()),
             ..PodSpec::default()
         }),
@@ -346,21 +594,27 @@ fn running_pod(namespace: &str, name: &str, age_seconds: i64, rv: u64) -> Pod {
                 condition("Ready"),
                 condition("PodScheduled"),
             ]),
-            container_statuses: Some(vec![ContainerStatus {
-                name: "app".to_owned(),
-                image: "example/app:1".to_owned(),
-                image_id: String::new(),
-                ready: true,
-                restart_count: 0,
-                started: Some(true),
-                state: Some(ContainerState {
-                    running: Some(ContainerStateRunning {
-                        started_at: Some(Time(created)),
-                    }),
-                    ..ContainerState::default()
-                }),
-                ..ContainerStatus::default()
-            }]),
+            container_statuses: Some(
+                containers
+                    .iter()
+                    .map(|c| ContainerStatus {
+                        name: (*c).to_owned(),
+                        image: "example/app:1".to_owned(),
+                        image_id: String::new(),
+                        container_id: Some(container_id(namespace, name, c, 0)),
+                        ready: true,
+                        restart_count: 0,
+                        started: Some(true),
+                        state: Some(ContainerState {
+                            running: Some(ContainerStateRunning {
+                                started_at: Some(Time(created)),
+                            }),
+                            ..ContainerState::default()
+                        }),
+                        ..ContainerStatus::default()
+                    })
+                    .collect(),
+            ),
             ..PodStatus::default()
         }),
     }
@@ -615,6 +869,40 @@ impl Request {
     fn include_object(&self) -> bool {
         self.param("includeObject").as_deref() != Some("None")
     }
+
+    fn flag(&self, key: &str) -> bool {
+        matches!(self.param(key).as_deref(), Some("true" | "1"))
+    }
+
+    /// The label and field selectors, for filtering lists and watches.
+    fn selector(&self) -> Selector {
+        let name = self.param("fieldSelector").and_then(|fields| {
+            fields
+                .split(',')
+                .find_map(|term| term.strip_prefix("metadata.name=").map(str::to_owned))
+        });
+        Selector {
+            labels: self.param("labelSelector").unwrap_or_default(),
+            name,
+        }
+    }
+}
+
+/// A label selector (equality only) and a `metadata.name` field selector.
+#[derive(Clone, Debug, Default)]
+struct Selector {
+    labels: String,
+    name: Option<String>,
+}
+
+impl Selector {
+    fn selects(&self, object: &Value) -> bool {
+        let name_ok = self
+            .name
+            .as_deref()
+            .is_none_or(|n| object["metadata"]["name"].as_str() == Some(n));
+        name_ok && matches_labels(object, &self.labels)
+    }
 }
 
 /// Where a request goes.
@@ -626,6 +914,11 @@ enum Route {
     Collection {
         resource: Resource,
         namespace: Option<String>,
+    },
+    /// A pod's log.
+    Log {
+        namespace: String,
+        pod: String,
     },
     /// Stored objects, or a 404.
     Other,
@@ -645,6 +938,10 @@ fn route(path: &str) -> Route {
         ["", "api", "v1", "namespaces", ns, "pods"] => Route::Collection {
             resource: Resource::Pods,
             namespace: Some((*ns).to_owned()),
+        },
+        ["", "api", "v1", "namespaces", ns, "pods", pod, "log"] => Route::Log {
+            namespace: (*ns).to_owned(),
+            pod: (*pod).to_owned(),
         },
         _ if path == crontab_base => Route::CronTabsV1,
         _ => match path
@@ -700,6 +997,7 @@ async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
                     let watch = Watch {
                         resource,
                         namespace,
+                        selector: request.selector(),
                         table: request.wants_table(),
                         include_object: request.include_object(),
                     };
@@ -707,6 +1005,16 @@ async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
                     return;
                 }
                 list(&inner, &request, resource, namespace.as_deref())
+            }
+            Route::Log { namespace, pod } => {
+                inner.log_requests.fetch_add(1, Ordering::SeqCst);
+                if serve_log(&mut stream, &inner, &namespace, &pod, &request)
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+                continue;
             }
             Route::Other => {
                 let (status, body) = objects_response(&inner, &request);
@@ -729,6 +1037,7 @@ fn list(inner: &Inner, request: &Request, resource: Resource, namespace: Option<
     inner.lists.fetch_add(1, Ordering::SeqCst);
     let state = inner.lock();
     let in_namespace = |ns: &str| namespace.is_none_or(|want| want == ns);
+    let selector = request.selector();
     // (object, cells, meta) for every matching item, in name order.
     let all: Vec<(Value, Value, Value)> = match resource {
         Resource::Pods => state
@@ -750,6 +1059,10 @@ fn list(inner: &Inner, request: &Request, resource: Resource, namespace: Option<
             .map(|(_, c)| (crontab_object(c), crontab_cells(c), crontab_meta(c)))
             .collect(),
     };
+    let all: Vec<(Value, Value, Value)> = all
+        .into_iter()
+        .filter(|(object, _, _)| selector.selects(object))
+        .collect();
 
     let start = request
         .param("continue")
@@ -810,6 +1123,7 @@ fn table_row(cells: &Value, meta: &Value, include_object: bool) -> Value {
 struct Watch {
     resource: Resource,
     namespace: Option<String>,
+    selector: Selector,
     table: bool,
     include_object: bool,
 }
@@ -821,6 +1135,7 @@ impl Watch {
                 .namespace
                 .as_deref()
                 .is_none_or(|ns| ns == change.namespace)
+            && self.selector.selects(&change.object)
     }
 
     /// Renders an event. As a Table, only the first event carries the column
@@ -1014,6 +1329,145 @@ fn legacy_crontab_resources() -> Value {
     })
 }
 
+/// What a log request reads, decided under the state lock.
+struct LogPlan {
+    lines: Vec<(Timestamp, String)>,
+    follow: Option<(LogKey, u32, usize, broadcast::Receiver<LogEvent>)>,
+}
+
+/// Serves a log read like the kubelet. Returns an error if the client is
+/// gone; the connection then closes.
+async fn serve_log(
+    stream: &mut TcpStream,
+    inner: &Inner,
+    namespace: &str,
+    pod: &str,
+    request: &Request,
+) -> std::io::Result<()> {
+    let plan = match plan_log(inner, namespace, pod, request) {
+        Ok(plan) => plan,
+        Err((code, reason, message)) => return write_status(stream, code, reason, &message).await,
+    };
+    let timestamps = request.flag("timestamps");
+    let format = |time: &Timestamp, text: &str| {
+        if timestamps {
+            format!("{time} {text}")
+        } else {
+            text.to_owned()
+        }
+    };
+    let head = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n";
+    stream.write_all(head.as_bytes()).await?;
+    for (time, text) in &plan.lines {
+        write_chunk(stream, &format(time, text)).await?;
+    }
+    if let Some((key, instance, from, mut live)) = plan.follow {
+        inner.open_log_streams.fetch_add(1, Ordering::SeqCst);
+        let _guard = WatchGuard(&inner.open_log_streams);
+        let mut probe = [0u8; 1];
+        loop {
+            tokio::select! {
+                event = live.recv() => match event {
+                    Ok(event) if event.key == key && event.instance == instance => match event.kind {
+                        LogEventKind::Line(ix, time, text) if ix >= from => {
+                            write_chunk(stream, &format(&time, &text)).await?;
+                        }
+                        LogEventKind::Line(..) => {}
+                        LogEventKind::Ended => break,
+                    },
+                    Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => break,
+                },
+                read = stream.read(&mut probe) => {
+                    if matches!(read, Ok(0) | Err(_)) {
+                        return Err(std::io::ErrorKind::ConnectionAborted.into());
+                    }
+                }
+            }
+        }
+    }
+    stream.write_all(b"0\r\n\r\n").await?;
+    stream.flush().await
+}
+
+type LogRefusal = (u16, &'static str, String);
+
+fn plan_log(
+    inner: &Inner,
+    namespace: &str,
+    pod: &str,
+    request: &Request,
+) -> Result<LogPlan, LogRefusal> {
+    let state = inner.lock();
+    let Some(found) = state.pods.get(&(namespace.to_owned(), pod.to_owned())) else {
+        return Err((404, "NotFound", format!("pods \"{pod}\" not found")));
+    };
+    let containers: Vec<&str> = found
+        .spec
+        .iter()
+        .flat_map(|s| s.containers.iter().map(|c| c.name.as_str()))
+        .collect();
+    let container = match (request.param("container").as_deref(), containers.as_slice()) {
+        (Some(c), _) => c.to_owned(),
+        (None, [only]) => (*only).to_owned(),
+        (None, _) => {
+            return Err((
+                400,
+                "BadRequest",
+                format!("a container name must be specified for pod {pod}"),
+            ));
+        }
+    };
+    let key = log_key(namespace, pod, &container);
+    let Some(log) = state.logs.get(&key) else {
+        return Err((
+            400,
+            "BadRequest",
+            format!("container {container} is not valid for pod {pod}"),
+        ));
+    };
+    let (source, follow) = if request.flag("previous") {
+        let Some(previous) = &log.previous else {
+            return Err((
+                400,
+                "BadRequest",
+                format!("previous terminated container \"{container}\" in pod \"{pod}\" not found"),
+            ));
+        };
+        (previous, false)
+    } else if log.running {
+        (&log.current, request.flag("follow"))
+    } else if let Some(previous) = &log.previous {
+        // A crashed container waiting to restart: the kubelet serves the
+        // last run's log and the stream ends at once.
+        (previous, false)
+    } else {
+        return Err((
+            400,
+            "BadRequest",
+            format!(
+                "container \"{container}\" in pod \"{pod}\" is waiting to start: ContainerCreating"
+            ),
+        ));
+    };
+    let since: Option<Timestamp> = request.param("sinceTime").and_then(|s| s.parse().ok());
+    let mut lines: Vec<(Timestamp, String)> = source
+        .iter()
+        .filter(|(time, _)| since.is_none_or(|s| *time >= s))
+        .cloned()
+        .collect();
+    if let Some(tail) = request
+        .param("tailLines")
+        .and_then(|t| t.parse::<usize>().ok())
+    {
+        let skip = lines.len().saturating_sub(tail);
+        lines.drain(..skip);
+    }
+    let follow = follow.then(|| (key, log.instance, log.current.len(), inner.logs.subscribe()));
+    Ok(LogPlan { lines, follow })
+}
+
+/// Counts an open connection while it lives.
 struct WatchGuard<'a>(&'a AtomicUsize);
 
 impl Drop for WatchGuard<'_> {
@@ -1174,6 +1628,30 @@ async fn read_head(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Option<String> 
             Ok(n) => buf.extend_from_slice(&chunk[..n]),
         }
     }
+}
+
+async fn write_status(
+    stream: &mut TcpStream,
+    code: u16,
+    reason: &str,
+    message: &str,
+) -> std::io::Result<()> {
+    let body = serde_json::json!({
+        "kind": "Status",
+        "apiVersion": "v1",
+        "metadata": {},
+        "status": "Failure",
+        "message": message,
+        "reason": reason,
+        "code": code,
+    })
+    .to_string();
+    let text = match code {
+        400 => "Bad Request",
+        404 => "Not Found",
+        _ => "Error",
+    };
+    write_response(stream, &format!("{code} {text}"), &body).await
 }
 
 async fn write_response(stream: &mut TcpStream, status: &str, body: &str) -> std::io::Result<()> {
