@@ -148,6 +148,20 @@ fn the_pane_draws_sequences_split_across_chunks(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn closing_the_window_stops_the_program(cx: &mut TestAppContext) {
+    let (terminal, peer, cx) = open(cx);
+    peer.output(b"$ ");
+    wait_for_screen(cx, &terminal, |text| text.starts_with('$'));
+    // The window holds the only other reference.
+    drop(terminal);
+
+    cx.update(|window, _| window.remove_window());
+    wait_for_event(cx, &peer, |event| {
+        matches!(event, StreamEvent::Closed).then_some(())
+    });
+}
+
+#[gpui_kit::test]
 fn keys_typed_in_the_pane_reach_the_program(cx: &mut TestAppContext) {
     let (terminal, peer, cx) = open(cx);
     peer.output(b"$ ");

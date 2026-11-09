@@ -1058,6 +1058,21 @@ fn finish(text: &str, trim: bool) -> String {
 
 impl EventEmitter<TerminalEvent> for TerminalState {}
 
+/// A terminal that is gone stops its program and source, as [`close`]
+/// does: a closed window must not leave a shell running, or a node shell's
+/// pod up.
+///
+/// [`close`]: TerminalState::close
+impl Drop for TerminalState {
+    fn drop(&mut self) {
+        if !self.closed
+            && let Some(handle) = &self.handle
+        {
+            handle.close();
+        }
+    }
+}
+
 impl Focusable for TerminalState {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
