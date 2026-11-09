@@ -9,6 +9,7 @@ pub mod catalog;
 mod client;
 mod errors;
 pub mod pods;
+pub mod shell;
 pub mod shell_env;
 
 use std::sync::Arc;
@@ -25,6 +26,7 @@ use pods::AbortOnDrop;
 #[derive(Clone, Debug)]
 pub struct EngineHandle {
     commands: mpsc::UnboundedSender<Command>,
+    shells: mpsc::UnboundedSender<shell::Request>,
 }
 
 impl EngineHandle {
@@ -43,11 +45,13 @@ pub fn start(
     sources: KubeconfigSources,
 ) -> (EngineHandle, mpsc::UnboundedReceiver<Event>) {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
+    let (shell_tx, shell_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
-    runtime.spawn(run(sources, command_rx, event_tx));
+    runtime.spawn(run(sources, command_rx, shell_rx, event_tx));
     (
         EngineHandle {
             commands: command_tx,
+            shells: shell_tx,
         },
         event_rx,
     )
@@ -62,11 +66,14 @@ struct Engine {
     /// The selected context's connection and pod watch. Replacing it drops
     /// the old task, which stops the old watch.
     active: Option<AbortOnDrop<()>>,
+    /// Node shells' helper pods that are up.
+    helpers: shell::HelperPods,
 }
 
 async fn run(
     sources: KubeconfigSources,
     mut commands: mpsc::UnboundedReceiver<Command>,
+    mut shells: mpsc::UnboundedReceiver<shell::Request>,
     events: mpsc::UnboundedSender<Event>,
 ) {
     let mut engine = Engine {
@@ -76,12 +83,17 @@ async fn run(
         clients: ClientPool::default(),
         catalog: model::Catalog::default(),
         active: None,
+        helpers: shell::HelperPods::default(),
     };
     engine.reload().await;
-    while let Some(command) = commands.recv().await {
-        match command {
-            Command::ReloadCatalog => engine.reload().await,
-            Command::SelectContext(name) => engine.select(name),
+    loop {
+        tokio::select! {
+            command = commands.recv() => match command {
+                Some(Command::ReloadCatalog) => engine.reload().await,
+                Some(Command::SelectContext(name)) => engine.select(name),
+                None => break,
+            },
+            Some(request) = shells.recv() => engine.shell(request),
         }
     }
     tracing::debug!("engine stopped: every handle was dropped");

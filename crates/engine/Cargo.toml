@@ -8,15 +8,22 @@ publish.workspace = true
 
 [dependencies]
 model.workspace = true
-kube.workspace = true
+# `ws` for exec with a TTY.
+kube = { workspace = true, features = ["ws"] }
 k8s-openapi.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
 futures.workspace = true
+# The pinned kubeconfig for local shells: a private temp file, as YAML.
+tempfile.workspace = true
+serde-saphyr.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
 
 [dev-dependencies]
+# The fake exec server speaks the kubelet's websocket protocol. Same version
+# kube uses, so no second copy.
+tokio-tungstenite = "0.30"
 tokio = { workspace = true, features = ["net", "io-util"] }
 serde_json.workspace = true
 tempfile.workspace = true

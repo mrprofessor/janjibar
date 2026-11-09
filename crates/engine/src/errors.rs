@@ -39,7 +39,7 @@ pub fn connect_error_from_watch(err: &watcher::Error) -> ConnectError {
     }
 }
 
-fn from_request(err: &kube::Error) -> ConnectError {
+pub(crate) fn from_request(err: &kube::Error) -> ConnectError {
     match err {
         kube::Error::Api(status) => from_status(status.code, &status.message),
         kube::Error::HyperError(_) | kube::Error::Service(_) => {
