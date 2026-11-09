@@ -2,9 +2,9 @@
 
 ## Which files
 
-1. Every entry in `KUBECONFIG`, split with `std::env::split_paths`, empty
-   entries ignored, in order.
-2. `~/.kube/config`, if it is not already in the list.
+Like kubectl: when `KUBECONFIG` is set to a non-empty value, its entries
+(split with `std::env::split_paths`, empty entries and repeats dropped, in
+order) are the only sources. Otherwise `~/.kube/config` is.
 
 Freelens also syncs extra files and folders the user adds. That comes later
 and uses the same catalog: a source list, read in order.

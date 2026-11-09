@@ -20,8 +20,7 @@ impl KubeconfigSources {
         Self { paths }
     }
 
-    /// The files named in `KUBECONFIG`, then `~/.kube/config` if it is not
-    /// already among them.
+    /// The files named in `KUBECONFIG`, or `~/.kube/config` when it is unset.
     pub fn from_env() -> Self {
         Self::from_parts(
             std::env::var_os("KUBECONFIG").as_deref(),
@@ -29,22 +28,24 @@ impl KubeconfigSources {
         )
     }
 
-    /// Builds the source list from a `KUBECONFIG` value and a home directory.
-    /// Empty entries in `KUBECONFIG` are ignored, as kubectl does.
+    /// Builds the source list the way kubectl does.
+    ///
+    /// When `KUBECONFIG` is set to a non-empty value, its entries replace
+    /// `~/.kube/config`. Empty entries and repeats are dropped. Otherwise the
+    /// home config is the only source.
     pub fn from_parts(kubeconfig: Option<&OsStr>, home: Option<&Path>) -> Self {
-        let mut paths: Vec<PathBuf> = kubeconfig
-            .map(|value| {
-                std::env::split_paths(value)
-                    .filter(|p| !p.as_os_str().is_empty())
-                    .collect()
-            })
-            .unwrap_or_default();
-        if let Some(home) = home {
-            let default = home.join(".kube").join("config");
-            if !paths.contains(&default) {
-                paths.push(default);
+        if let Some(value) = kubeconfig.filter(|v| !v.is_empty()) {
+            let mut paths: Vec<PathBuf> = Vec::new();
+            for path in std::env::split_paths(value) {
+                if !path.as_os_str().is_empty() && !paths.contains(&path) {
+                    paths.push(path);
+                }
             }
+            return Self { paths };
         }
+        let paths = home
+            .map(|home| vec![home.join(".kube").join("config")])
+            .unwrap_or_default();
         Self { paths }
     }
 
@@ -186,32 +187,34 @@ mod tests {
     }
 
     #[test]
-    fn sources_from_kubeconfig_then_home() {
+    fn kubeconfig_replaces_the_home_config() {
         let var = std::env::join_paths(["/a/one", "", "/b/two"]).unwrap();
         let sources = KubeconfigSources::from_parts(Some(&var), Some(Path::new("/home/me")));
         assert_eq!(
             sources.paths(),
-            [
-                PathBuf::from("/a/one"),
-                PathBuf::from("/b/two"),
-                PathBuf::from("/home/me/.kube/config"),
-            ]
+            [PathBuf::from("/a/one"), PathBuf::from("/b/two")]
         );
     }
 
     #[test]
-    fn home_config_is_not_listed_twice() {
-        let var = std::env::join_paths(["/home/me/.kube/config", "/x"]).unwrap();
+    fn repeated_kubeconfig_entries_are_dropped() {
+        let var = std::env::join_paths(["/x", "/home/me/.kube/config", "/x"]).unwrap();
         let sources = KubeconfigSources::from_parts(Some(&var), Some(Path::new("/home/me")));
         assert_eq!(
             sources.paths(),
-            [PathBuf::from("/home/me/.kube/config"), PathBuf::from("/x")]
+            [PathBuf::from("/x"), PathBuf::from("/home/me/.kube/config")]
         );
     }
 
     #[test]
     fn no_kubeconfig_var_means_home_only() {
         let sources = KubeconfigSources::from_parts(None, Some(Path::new("/h")));
+        assert_eq!(sources.paths(), [PathBuf::from("/h/.kube/config")]);
+    }
+
+    #[test]
+    fn empty_kubeconfig_var_means_home_only() {
+        let sources = KubeconfigSources::from_parts(Some(OsStr::new("")), Some(Path::new("/h")));
         assert_eq!(sources.paths(), [PathBuf::from("/h/.kube/config")]);
     }
 

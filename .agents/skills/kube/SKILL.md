@@ -17,9 +17,9 @@ unsure, docs.rs may describe a different version.
 
 ## Kubeconfig: a catalog across many files
 
-kubectl merges `KUBECONFIG` (a `:`-separated list) and falls back to
-`~/.kube/config`. We go further and keep **every context from every file**,
-remembering which file it came from.
+Sources follow kubectl: `KUBECONFIG` (a `:`-separated list) when set, else
+`~/.kube/config`. We keep **every context from every file**, remembering
+which file it came from.
 
 - Read each file with `kube::config::Kubeconfig::read_from(path)`. It handles
   multi-document YAML, BOMs and UTF-16, and rewrites relative cert, key,
