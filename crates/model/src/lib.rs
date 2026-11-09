@@ -26,7 +26,8 @@ pub use log::{
 pub use metrics::{
     ClusterMetric, IngressMetric, MetricQuery, MetricSeries, NodeMetric, PodMetric, PodSelection,
     PodSet, PrometheusProvider, PrometheusSettings, PrometheusSource, PrometheusUrl, PvcMetric,
-    QueryMethod, Sample, ServiceRef, TimeRange, WorkloadKind,
+    QueryMethod, Sample, ServiceRef, TimeRange, Usage, UsageHistory, UsageInterest, UsageObject,
+    UsageScope, UsageSnapshot, UsageStatus, WorkloadKind,
 };
 pub use pod::{Health, PodRow, PodSnapshot, Ready};
 pub use table::{Column, ColumnType, TableRow, TableSnapshot};
