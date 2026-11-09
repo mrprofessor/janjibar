@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Config
+current-context: kind-dev
+clusters:
+  - name: kind-dev
+    cluster:
+      server: https://127.0.0.1:6443
+  - name: staging
+    cluster:
+      server: https://staging.other.example.com
+users:
+  - name: kind-dev
+    user:
+      token: not-a-real-token
+contexts:
+  - name: kind-dev
+    context:
+      cluster: kind-dev
+      user: kind-dev
+  - name: staging
+    context:
+      cluster: staging
+      user: kind-dev

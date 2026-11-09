@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Config
+current-context: prod-eu
+clusters:
+  - name: prod-eu
+    cluster:
+      server: https://prod-eu.example.com
+  - name: staging
+    cluster:
+      server: https://staging.example.com
+users:
+  - name: sso
+    user:
+      exec:
+        apiVersion: client.authentication.k8s.io/v1
+        command: kubelogin
+        args: [get-token]
+contexts:
+  - name: prod-eu
+    context:
+      cluster: prod-eu
+      user: sso
+  - name: staging
+    context:
+      cluster: staging
+      user: sso
+      namespace: web

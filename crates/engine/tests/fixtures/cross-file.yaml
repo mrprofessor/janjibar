@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Config
+users:
+  - name: admin
+    user:
+      token: not-a-real-token
+contexts:
+  - name: prod-eu-admin
+    context:
+      cluster: prod-eu
+      user: admin
