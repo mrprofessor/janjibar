@@ -17,6 +17,7 @@ bridge = { path = "crates/bridge" }
 ui = { path = "crates/ui" }
 helm = { path = "crates/helm" }
 prometheus = { path = "crates/prometheus" }
+resource-metrics = { path = "crates/resource-metrics" }
 
 # GPUI. Pin exactly: gpui-kit re-exports gpui-pre =0.3.11 and enables
 # runtime_shaders and font-kit on the platform crate for us.
