@@ -1,0 +1,15 @@
+[package]
+name = "kinds"
+description = "Columns, rows and inspector details for each built-in Kubernetes kind."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+model.workspace = true
+k8s-openapi.workspace = true
+kube-core.workspace = true
+
+[lints]
+workspace = true

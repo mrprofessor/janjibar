@@ -5,5 +5,12 @@ allow-panic-in-tests = true
 allow-print-in-tests = true
 allow-dbg-in-tests = true
 
-# Product names in prose, not code. ".." keeps clippy's defaults.
-doc-valid-idents = ["PromQL", "OpenShift", "VictoriaMetrics", ".."]
+# Names that read as words in our docs, not as code: products and
+# Kubernetes kinds. ".." keeps clippy's defaults.
+doc-valid-idents = [
+  "PromQL", "OpenShift", "VictoriaMetrics", "JetBrains",
+  "ConfigMap", "ConfigMaps", "CronJob", "CronJobs", "DaemonSet", "DaemonSets",
+  "ReplicaSet", "ReplicaSets", "StatefulSet", "StatefulSets", "StorageClass",
+  "StorageClasses", "PersistentVolume", "PersistentVolumes",
+  "PersistentVolumeClaim", "PersistentVolumeClaims", "..",
+]
