@@ -10,9 +10,11 @@
 //!   pointer and the input method to it.
 //! - A [`FrameSource`] produces frames. [`Engine`] runs a [`ByteSource`]
 //!   through a Ghostty terminal on an owner thread. [`LocalPty`] is the byte
-//!   source for a local program. [`StreamSource`] is one the application
-//!   feeds itself, such as a pod's exec stream: bytes in, bytes out and the
-//!   grid size. [`FixtureSource`] parses canned bytes for tests.
+//!   source for a local program. [`SessionSource`] serves a shell the
+//!   engine runs, `exec` into a pod or a node shell, over a
+//!   `model::ShellSession`. [`StreamSource`] is one the application feeds
+//!   itself: bytes in, bytes out and the grid size. [`FixtureSource`]
+//!   parses canned bytes for tests.
 //! - [`shell`] resolves the user's shell and its login command the way
 //!   Ghostty does.
 //!
@@ -111,6 +113,7 @@ mod process;
 mod pty;
 mod pty_io;
 mod selection;
+mod session;
 pub mod shell;
 mod source;
 mod state;
@@ -128,6 +131,7 @@ pub use geometry::Geometry;
 pub use input::TerminalInput;
 pub use options::{EngineOptions, LocalTerminalOptions, ShellIntegration, WorkingDirectory};
 pub use pty::LocalPty;
+pub use session::SessionSource;
 pub use source::{FixtureSource, FrameHandle, FrameSink, FrameSource, StartOptions};
 pub use state::{TerminalConfig, TerminalEvent, TerminalState};
 pub use stream::{StreamEvent, StreamPeer, StreamSource};
