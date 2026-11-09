@@ -140,7 +140,7 @@ snapshots a second and paints only visible rows.
 - GPUI view tests with `TestAppContext` for keyboard flows and the palette
   (harness in `crates/ui/tests`, first tests in place).
 - Load test: a kind cluster with 5,000 pods and 100 CRDs must stay smooth and
-  under 150 MB.
+  under 150 MB, measured with a 1360x840-point window.
 - Manual checks: VoiceOver, IME, exec auth plugins (aws, gke, kubelogin).
 
 ## Acceptance Criteria
