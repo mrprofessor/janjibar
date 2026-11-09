@@ -5,6 +5,7 @@
 //! 2. Start the tokio runtime and the engine on it.
 //! 3. Start GPUI on the main thread and open the window.
 
+mod args;
 mod shell_env;
 
 use std::rc::Rc;
@@ -17,50 +18,13 @@ use gpui_kit::{
 use model::{Command, ContextName, brand};
 use tracing_subscriber::EnvFilter;
 
-struct Args {
-    /// Connect to this context at startup.
-    context: Option<String>,
-    /// Open logs for this pod (`namespace/name`) at startup.
-    logs: Option<(String, String)>,
-}
-
-fn parse_args() -> Result<Args, String> {
-    let mut args = Args {
-        context: None,
-        logs: None,
-    };
-    let mut it = std::env::args().skip(1);
-    while let Some(arg) = it.next() {
-        match arg.as_str() {
-            "--context" => {
-                args.context = Some(it.next().ok_or("--context needs a context name")?);
-            }
-            "--logs" => {
-                let pod = it.next().ok_or("--logs needs NAMESPACE/POD")?;
-                let (ns, name) = pod.split_once('/').ok_or("--logs needs NAMESPACE/POD")?;
-                args.logs = Some((ns.to_owned(), name.to_owned()));
-            }
-            other => {
-                if let Some(name) = other.strip_prefix("--context=") {
-                    args.context = Some(name.to_owned());
-                } else {
-                    return Err(format!(
-                        "unknown argument `{other}`. Usage: [--context NAME [--logs NAMESPACE/POD]]"
-                    ));
-                }
-            }
-        }
-    }
-    Ok(args)
-}
-
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
-    let args = parse_args().map_err(anyhow::Error::msg)?;
+    let args = args::parse(std::env::args().skip(1)).map_err(anyhow::Error::msg)?;
 
     shell_env::sync_path_from_login_shell();
 
@@ -130,15 +94,26 @@ fn main() -> anyhow::Result<()> {
                         // A failed update means the window is gone.
                         let _ = weak.update(cx, ui::Workspace::reload);
                     });
-                    if let Some(name) = args.context {
-                        workspace.update(cx, |w, cx| w.select(ContextName::new(name), cx));
-                        if let Some((ns, pod)) = args.logs {
-                            let opened = window.update(cx, |_, window, cx| {
-                                workspace.update(cx, |w, cx| w.open_pod_logs(ns, pod, window, cx));
-                            });
-                            if let Err(err) = opened {
-                                tracing::warn!("could not open logs at startup: {err:#}");
+                    let has_context = args.context.is_some();
+                    workspace.update(cx, |w, cx| {
+                        if let Some(kind) = args.kind {
+                            w.select_kind(kind, cx);
+                        }
+                        if let Some(name) = args.context {
+                            w.select(ContextName::new(name), cx);
+                            if let Some(key) = args.inspect {
+                                w.inspect(key, cx);
                             }
+                        }
+                    });
+                    if has_context && let Some((namespace, pod)) = args.logs {
+                        let opened = window.update(cx, |_, window, cx| {
+                            workspace.update(cx, |w, cx| {
+                                w.open_pod_logs(namespace, pod, window, cx);
+                            });
+                        });
+                        if let Err(err) = opened {
+                            tracing::warn!("could not open logs at startup: {err:#}");
                         }
                     }
                 }
