@@ -75,8 +75,11 @@ mem_forget = "warn"
 exit = "warn"
 
 [profile.release]
-debug = "line-tables-only"
-strip = "debuginfo"
+debug = false
+# Cargo strips release builds by default. With this toolchain on macOS 27 the
+# stripped proc-macro dylibs fail to load ("mis-aligned LINKEDIT string pool"),
+# so keep symbols. Strip the final binary when packaging instead.
+strip = false
 
 [profile.dev.package."*"]
 # Dependencies build optimised so the dev app is usable; our code stays fast to rebuild.
