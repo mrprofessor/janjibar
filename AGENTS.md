@@ -22,11 +22,12 @@ crates/
   model/    plain data that crosses the bridge (rows, catalog, events)
   bridge/   vendored gpui_tokio; tokio <-> GPUI glue
   ui/       GPUI views: shell, sidebar, tabs, tables, theme, fonts
+  term/     terminal pane on libghostty-vt; PTY and byte-stream sources
 .agents/skills/   skills for agents (.claude/skills links here)
 ```
 
 Planned crates, added only when they get real code: `kinds` (per-kind specs),
-`term` (terminal pane), `editor` (YAML edit, diff, dry-run).
+`editor` (YAML edit, diff, dry-run).
 
 ## Commands
 
@@ -63,8 +64,9 @@ Logs: `RUST_LOG=engine=debug,app=debug nix develop -c cargo run -p app`.
   changed. The UI swaps the snapshot in and paints visible rows only.
 - Kubernetes clients are built on a blocking thread: exec auth plugins run
   synchronously and may wait on a browser login.
-- `unsafe` is denied workspace-wide. The one exception is `set_var` during
-  startup in `app`, before any thread exists. New unsafe needs a
+- `unsafe` is denied workspace-wide. The exceptions are `set_var` during
+  startup in `app`, before any thread exists, and platform calls in `term`
+  (one pty descriptor borrow, the macOS process table). New unsafe needs a
   `// SAFETY:` comment and a reason in review.
 
 ## Version pins
