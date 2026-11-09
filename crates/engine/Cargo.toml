@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 model.workspace = true
+kinds.workspace = true
 kube.workspace = true
 k8s-openapi.workspace = true
 # `net` for forward listeners, `io-util` to pipe their connections.
@@ -19,7 +20,6 @@ serde.workspace = true
 serde_json.workspace = true
 http.workspace = true
 jiff = { workspace = true, features = ["tz-system", "tzdb-zoneinfo"] }
-
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["net", "io-util"] }

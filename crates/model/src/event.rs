@@ -3,8 +3,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-use std::sync::Arc;
-
 use crate::resource::{Details, InspectTarget, OwnerLink};
 use crate::{
     Catalog, ContextName, ForwardId, ForwardRow, ForwardSpec, GroupVersionResource, KindCatalog,

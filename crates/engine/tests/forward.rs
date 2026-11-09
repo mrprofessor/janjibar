@@ -72,6 +72,7 @@ async fn start_in(dir: tempfile::TempDir, api: &FakeForwardApi) -> Setup {
         KubeconfigSources::new(vec![kubeconfig]),
         EngineOptions {
             forwards_file: Some(dir.path().join("forwards.json")),
+            ..EngineOptions::default()
         },
     );
     // Wait for the catalog so the context is known before any command.

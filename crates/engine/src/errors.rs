@@ -24,24 +24,19 @@ pub fn connect_error_from_client(err: &kube::Error, exec_command: Option<&str>) 
         kube::Error::Auth(auth) => ConnectError::Auth(auth_message(auth)),
         kube::Error::InferKubeconfig(e) => ConnectError::Config(e.to_string()),
         kube::Error::RustlsTls(e) => ConnectError::Config(format!("TLS setup failed: {e}")),
-        other => from_request(other),
+        other => connect_error_from_request(other),
     }
 }
 
-/// Maps an error from the pod watcher, before the first list succeeded.
+/// Maps an error from a watcher, before its first list succeeded.
 pub fn connect_error_from_watch(err: &watcher::Error) -> ConnectError {
     match err {
         watcher::Error::InitialListFailed(e)
         | watcher::Error::WatchStartFailed(e)
-        | watcher::Error::WatchFailed(e) => from_request(e),
+        | watcher::Error::WatchFailed(e) => connect_error_from_request(e),
         watcher::Error::WatchError(status) => from_status(status.code, &status.message),
         watcher::Error::NoResourceVersion => ConnectError::Other(err.to_string()),
     }
-}
-
-/// Maps an error from a single request, like discovery or a table list.
-pub(crate) fn connect_error_from_request(err: &kube::Error) -> ConnectError {
-    from_request(err)
 }
 
 /// Maps a `Status` the server sent inside a response, like a watch `ERROR`.
@@ -49,7 +44,9 @@ pub(crate) fn connect_error_from_status(code: u16, message: &str) -> ConnectErro
     from_status(code, message)
 }
 
-fn from_request(err: &kube::Error) -> ConnectError {
+/// Maps an error from a single request, like discovery, a table list or the
+/// version probe.
+pub(crate) fn connect_error_from_request(err: &kube::Error) -> ConnectError {
     match err {
         kube::Error::Api(status) => from_status(status.code, &status.message),
         kube::Error::HyperError(_) | kube::Error::Service(_) => {

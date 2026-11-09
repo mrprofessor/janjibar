@@ -28,7 +28,8 @@ use tokio::time::Instant;
 
 use crate::client::ClientPool;
 use crate::errors::connect_error_from_watch;
-use crate::pods::{AbortOnDrop, SNAPSHOT_WINDOW};
+use crate::hub::SNAPSHOT_WINDOW;
+use crate::task::AbortOnDrop;
 use follow::{ContainerSeen, Follower};
 
 /// Lines in flight from followers to the tab task. When the tab falls

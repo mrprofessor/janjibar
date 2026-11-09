@@ -14,14 +14,15 @@ use std::time::SystemTime;
 use k8s_openapi::jiff::Timestamp;
 use kube::Client;
 use model::{
-    Column, ConnectError, ConnectionState, ContextName, Event, GroupVersionResource, KindInfo,
-    Scope, TableRow, TableSnapshot,
+    Column, ConnectError, ConnectionState, ContextName, Event, GroupVersionResource, Health,
+    KindInfo, Scope, TableRow, TableSnapshot,
 };
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::age::human_age;
-use crate::pods::{AbortOnDrop, SNAPSHOT_WINDOW};
+use crate::hub::SNAPSHOT_WINDOW;
+use crate::task::AbortOnDrop;
 
 /// How often ages are re-checked when nothing else changes.
 const AGE_TICK: std::time::Duration = std::time::Duration::from_secs(1);
@@ -197,6 +198,8 @@ fn project(layout: &Layout, rows: &[Arc<StoredRow>], now: Timestamp) -> Vec<Tabl
                 created: row.created.map(SystemTime::from),
                 cells: layout.list_cells.iter().map(cell).collect(),
                 details: layout.detail_cells.iter().map(cell).collect(),
+                // The server does not say what a status means.
+                health: Health::Unknown,
             }
         })
         .collect()

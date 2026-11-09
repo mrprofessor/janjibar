@@ -22,7 +22,8 @@ use model::{ConnectError, ContextName, Event, ForwardId, ForwardRow, ForwardSpec
 use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
 
-use crate::pods::{AbortOnDrop, SNAPSHOT_WINDOW};
+use crate::hub::SNAPSHOT_WINDOW;
+use crate::task::AbortOnDrop;
 
 /// Every forward the engine knows, running or not. Cheap to clone.
 #[derive(Clone)]
