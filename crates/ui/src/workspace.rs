@@ -1,0 +1,819 @@
+//! The main window: sidebar, tab bar, work area and status bar.
+
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::Size;
+use gpui_kit::component::table::{DataTable, TableState};
+use gpui_kit::{
+    AnyElement, App, Context, Entity, FontWeight, Rgba, SharedString, Task, Window, div,
+    prelude::*, px, svg,
+};
+use model::{Catalog, Command, ConnectError, ConnectionState, ContextInfo, ContextName, Event};
+use tokio::sync::mpsc;
+
+use crate::assets::Icon;
+use crate::pod_table::{self, PodTable};
+use crate::theme;
+
+/// Room for the macOS window buttons at the top left of the sidebar.
+const TRAFFIC_LIGHTS_WIDTH: f32 = 80.0;
+
+/// Sends a command to the engine.
+pub type CommandSink = Rc<dyn Fn(Command)>;
+
+/// The root view of the main window.
+pub struct Workspace {
+    app_name: SharedString,
+    send: CommandSink,
+    /// `None` until the engine has read the kubeconfig files once.
+    catalog: Option<Catalog>,
+    selected: Option<ContextName>,
+    states: HashMap<ContextName, ConnectionState>,
+    table: Entity<TableState<PodTable>>,
+    /// Whether a snapshot for the selected context has arrived.
+    has_rows: bool,
+    _events: Task<()>,
+}
+
+impl Workspace {
+    /// Builds the workspace and starts listening to engine events.
+    pub fn new(
+        app_name: impl Into<SharedString>,
+        send: CommandSink,
+        mut events: mpsc::UnboundedReceiver<Event>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let table =
+            cx.new(|cx| TableState::new(PodTable::default(), window, cx).col_movable(false));
+        // tokio's receiver is executor-agnostic, so GPUI's foreground
+        // executor can await it directly.
+        let events_task = cx.spawn(async move |this, cx| {
+            while let Some(event) = events.recv().await {
+                if this.update(cx, |this, cx| this.apply(event, cx)).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            app_name: app_name.into(),
+            send,
+            catalog: None,
+            selected: None,
+            states: HashMap::new(),
+            table,
+            has_rows: false,
+            _events: events_task,
+        }
+    }
+
+    /// Selects a context and asks the engine to connect to it.
+    pub fn select(&mut self, context: ContextName, cx: &mut Context<Self>) {
+        if self.selected.as_ref() == Some(&context) {
+            return;
+        }
+        self.selected = Some(context.clone());
+        self.has_rows = false;
+        pod_table::set_rows(&self.table, Vec::new().into(), cx);
+        (self.send)(Command::SelectContext(context));
+        cx.notify();
+    }
+
+    /// Asks the engine to read the kubeconfig files again.
+    pub fn reload(&mut self, cx: &mut Context<Self>) {
+        (self.send)(Command::ReloadCatalog);
+        cx.notify();
+    }
+
+    fn apply(&mut self, event: Event, cx: &mut Context<Self>) {
+        match event {
+            Event::Catalog(catalog) => self.catalog = Some(catalog),
+            Event::Connection { context, state } => {
+                self.states.insert(context, state);
+            }
+            Event::Pods(snapshot) => {
+                if self.selected.as_ref() != Some(&snapshot.context) {
+                    return;
+                }
+                self.has_rows = true;
+                pod_table::set_rows(&self.table, snapshot.rows, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn selected_state(&self) -> Option<&ConnectionState> {
+        self.states.get(self.selected.as_ref()?)
+    }
+
+    fn pod_count(&self, cx: &App) -> usize {
+        self.table.read(cx).delegate().rows().len()
+    }
+}
+
+impl Render for Workspace {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .flex()
+            .bg(theme::CANVAS)
+            .text_color(theme::TEXT)
+            .font_family(theme::UI_FONT)
+            .text_size(px(theme::TEXT_BASE))
+            .child(self.render_sidebar(cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(tab_bar())
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .p(px(theme::PANE_GAP))
+                            .child(self.render_pane(cx)),
+                    )
+                    .child(self.render_status_bar(cx)),
+            )
+    }
+}
+
+// Sidebar.
+impl Workspace {
+    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .w(px(theme::SIDEBAR_WIDTH))
+            .flex_none()
+            .h_full()
+            .flex()
+            .flex_col()
+            .bg(theme::CHROME)
+            .border_r_1()
+            .border_color(theme::BORDER)
+            .child(self.render_brand())
+            .child(section_label("Clusters"))
+            .child(self.render_clusters(cx))
+            .child(self.render_kinds(cx))
+            .child(div().flex_1())
+            .child(self.render_sidebar_footer())
+    }
+
+    fn render_brand(&self) -> impl IntoElement {
+        // The traffic lights sit at the left of this row; the name follows them.
+        div()
+            .h(px(46.0))
+            .flex_none()
+            .flex()
+            .items_center()
+            .pl(px(TRAFFIC_LIGHTS_WIDTH))
+            .pr(px(14.0))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(
+                        div()
+                            .size(px(18.0))
+                            .rounded(px(5.0))
+                            .bg(theme::TEXT)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(icon(Icon::Box, 11.0, theme::CHROME)),
+                    )
+                    .child(self.app_name.clone()),
+            )
+    }
+
+    fn render_clusters(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(catalog) = &self.catalog else {
+            return sidebar_note("Reading kubeconfig").into_any_element();
+        };
+        if catalog.is_empty() {
+            return sidebar_note("No contexts found").into_any_element();
+        }
+        let mut rows = Vec::with_capacity(catalog.contexts.len());
+        for info in &catalog.contexts {
+            rows.push(
+                self.render_cluster_row(info, catalog, cx)
+                    .into_any_element(),
+            );
+        }
+        div()
+            .flex()
+            .flex_col()
+            .px(px(8.0))
+            .children(rows)
+            .into_any_element()
+    }
+
+    fn render_cluster_row(
+        &self,
+        info: &ContextInfo,
+        catalog: &Catalog,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let name = info.name.clone();
+        let selected = self.selected.as_ref() == Some(&info.name);
+        let is_current = catalog.current.as_ref() == Some(&info.name);
+        let right: AnyElement = match self.states.get(&info.name) {
+            Some(state) => dot(state_color(state), 7.0).into_any_element(),
+            None if is_current => div()
+                .text_size(px(theme::TEXT_LABEL))
+                .text_color(theme::DIM)
+                .child("current")
+                .into_any_element(),
+            None => div().into_any_element(),
+        };
+        div()
+            .id(SharedString::from(format!("cluster-{}", info.name)))
+            .h(px(theme::ROW_HEIGHT))
+            .flex()
+            .items_center()
+            .gap(px(9.0))
+            .px(px(8.0))
+            .rounded(px(theme::ROW_RADIUS))
+            .text_color(if selected {
+                theme::TEXT
+            } else {
+                theme::TERM_TEXT
+            })
+            .when(selected, |el| el.bg(theme::SELECTED))
+            .when(!selected, |el| el.hover(|s| s.bg(theme::HOVER)))
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| this.select(name.clone(), cx)))
+            .child(letter_tile(info.name.as_str()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .child(shared(&info.name)),
+            )
+            .child(div().flex_none().child(right))
+    }
+
+    fn render_kinds(&self, cx: &App) -> impl IntoElement {
+        let title: SharedString = self
+            .selected
+            .as_ref()
+            .map_or_else(|| "Resources".into(), shared);
+        let connected = self.selected.is_some();
+        let pods = connected.then(|| self.pod_count(cx));
+        let kinds = [
+            (Icon::LayoutDashboard, "Overview"),
+            (Icon::Server, "Nodes"),
+            (Icon::Box, "Pods"),
+            (Icon::Layers, "Deployments"),
+            (Icon::Database, "StatefulSets"),
+            (Icon::Briefcase, "Jobs and CronJobs"),
+            (Icon::Network, "Services"),
+            (Icon::Globe, "Ingresses"),
+            (Icon::FileText, "ConfigMaps"),
+            (Icon::KeyRound, "Secrets"),
+            (Icon::Bell, "Events"),
+        ];
+        div()
+            .mt(px(10.0))
+            .flex()
+            .flex_col()
+            .child(section_label(title))
+            .child(
+                div()
+                    .px(px(8.0))
+                    .flex()
+                    .flex_col()
+                    .children(kinds.into_iter().map(|(kind_icon, label)| {
+                        let live = label == "Pods";
+                        let active = live && connected;
+                        let count = if live && self.has_rows {
+                            pods.map(|n| n.to_string())
+                        } else {
+                            None
+                        };
+                        div()
+                            .h(px(28.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(9.0))
+                            .px(px(8.0))
+                            .rounded(px(theme::ROW_RADIUS))
+                            .text_color(if active {
+                                theme::TEXT
+                            } else if live {
+                                theme::MUTED
+                            } else {
+                                theme::DIM
+                            })
+                            .when(active, |el| el.bg(theme::SELECTED))
+                            .child(icon(
+                                kind_icon,
+                                14.0,
+                                if active { theme::TEXT } else { theme::DIM },
+                            ))
+                            .child(div().flex_1().child(label))
+                            .children(count.map(|n| {
+                                div()
+                                    .font_family(theme::MONO_FONT)
+                                    .text_size(px(theme::TEXT_LABEL))
+                                    .text_color(theme::DIM)
+                                    .child(n)
+                            }))
+                    })),
+            )
+    }
+
+    fn render_sidebar_footer(&self) -> impl IntoElement {
+        let (text, color) = match &self.catalog {
+            None => (SharedString::from(""), theme::DIM),
+            Some(c) if !c.problems.is_empty() => (
+                format!(
+                    "{} kubeconfig file{} could not be read",
+                    c.problems.len(),
+                    plural(c.problems.len())
+                )
+                .into(),
+                theme::AMBER,
+            ),
+            Some(c) => {
+                let found = c.sources.len();
+                (
+                    format!(
+                        "{} contexts from {found} file{}",
+                        c.contexts.len(),
+                        plural(found)
+                    )
+                    .into(),
+                    theme::DIM,
+                )
+            }
+        };
+        div()
+            .h(px(40.0))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .px(px(16.0))
+            .border_t_1()
+            .border_color(theme::BORDER)
+            .text_size(px(12.0))
+            .text_color(color)
+            .child(icon(Icon::FolderOpen, 13.0, theme::DIM))
+            .child(
+                div()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .child(text),
+            )
+    }
+}
+
+// Tabs, pane and status bar.
+impl Workspace {
+    fn render_pane(&self, cx: &App) -> impl IntoElement {
+        let count = self.pod_count(cx);
+        let scope: SharedString = if self.selected.is_some() {
+            "all namespaces".into()
+        } else {
+            "".into()
+        };
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(theme::PANE)
+            .border_1()
+            .border_color(theme::BORDER)
+            .rounded(px(theme::PANE_RADIUS))
+            .overflow_hidden()
+            .child(
+                div()
+                    .h(px(theme::PANE_HEADER_HEIGHT))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .pl(px(11.0))
+                    .pr(px(10.0))
+                    .border_b_1()
+                    .border_color(theme::BORDER)
+                    .text_size(px(12.0))
+                    .text_color(theme::MUTED)
+                    .child(icon(Icon::Box, 13.0, theme::MUTED))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme::TEXT)
+                            .child("Pods"),
+                    )
+                    .child(scope)
+                    .child(div().flex_1())
+                    .when(self.has_rows, |el| {
+                        el.child(
+                            div()
+                                .font_family(theme::MONO_FONT)
+                                .text_color(theme::DIM)
+                                .child(format!("{count} pod{}", plural(count))),
+                        )
+                    }),
+            )
+            .child(div().flex_1().min_h_0().child(self.render_pane_body(count)))
+    }
+
+    fn render_pane_body(&self, count: usize) -> AnyElement {
+        if let Some(empty) = self.empty_state(count) {
+            return empty.render();
+        }
+        div()
+            .size_full()
+            .px(px(6.0))
+            .pt(px(2.0))
+            .child(
+                DataTable::new(&self.table)
+                    .with_size(Size::Small)
+                    .header_row_height(px(28.0))
+                    .bordered(false)
+                    .stripe(false)
+                    .accessibility_label("Pods"),
+            )
+            .into_any_element()
+    }
+
+    /// What to show instead of the table, if anything.
+    fn empty_state(&self, count: usize) -> Option<Empty> {
+        let Some(catalog) = &self.catalog else {
+            return Some(Empty::new(Icon::LoaderCircle, "Reading kubeconfig", ""));
+        };
+        if catalog.is_empty() {
+            let looked: Vec<String> = catalog
+                .sources
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            let body = std::iter::once(
+                "Set KUBECONFIG or create ~/.kube/config, then reload with Cmd-R.".to_owned(),
+            )
+            .chain(
+                catalog
+                    .problems
+                    .iter()
+                    .map(|p| format!("{}: {}", p.path.display(), p.message)),
+            )
+            .collect::<Vec<_>>()
+            .join("\n");
+            return Some(
+                Empty::new(Icon::FolderOpen, "No kubeconfig found", body)
+                    .detail(format!("Looked in: {}", looked.join(", "))),
+            );
+        }
+        let Some(selected) = &self.selected else {
+            return Some(Empty::new(
+                Icon::Plug,
+                "Select a cluster",
+                "Pick a context in the sidebar to connect.",
+            ));
+        };
+        let server = catalog
+            .get(selected)
+            .and_then(|c| c.server.clone())
+            .unwrap_or_default();
+        match self.selected_state() {
+            None | Some(ConnectionState::Connecting) => Some(
+                Empty::new(Icon::LoaderCircle, format!("Connecting to {selected}"), "")
+                    .detail(server),
+            ),
+            Some(ConnectionState::Failed(err)) => Some(error_state(err, &server)),
+            Some(ConnectionState::Live | ConnectionState::Retrying(_)) if !self.has_rows => {
+                Some(Empty::new(Icon::LoaderCircle, "Loading pods", ""))
+            }
+            Some(ConnectionState::Live | ConnectionState::Retrying(_)) if count == 0 => {
+                Some(Empty::new(
+                    Icon::Box,
+                    "No pods",
+                    "This cluster has no pods you can see.",
+                ))
+            }
+            Some(_) => None,
+        }
+    }
+
+    fn render_status_bar(&self, cx: &App) -> impl IntoElement {
+        let mut items: Vec<AnyElement> = Vec::new();
+        if let Some(selected) = &self.selected {
+            let state = self.selected_state();
+            let (label, color) = match state {
+                None | Some(ConnectionState::Connecting) => ("connecting", theme::AMBER),
+                Some(ConnectionState::Live) => ("live", theme::GREEN),
+                Some(ConnectionState::Retrying(_)) => ("reconnecting", theme::AMBER),
+                Some(ConnectionState::Failed(_)) => ("not connected", theme::RED),
+            };
+            items.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.0))
+                    .text_color(theme::TERM_TEXT)
+                    .child(dot(color, 6.0))
+                    .child(shared(selected))
+                    .into_any_element(),
+            );
+            if self.has_rows {
+                let count = self.pod_count(cx);
+                items.push(
+                    div()
+                        .child(format!("{count} pod{}", plural(count)))
+                        .into_any_element(),
+                );
+            }
+            items.push(div().text_color(color).child(label).into_any_element());
+        } else {
+            items.push(div().child("No cluster selected").into_any_element());
+        }
+        div()
+            .h(px(theme::STATUS_BAR_HEIGHT))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(16.0))
+            .px(px(12.0))
+            .bg(theme::CHROME)
+            .border_t_1()
+            .border_color(theme::BORDER)
+            .text_size(px(12.0))
+            .text_color(theme::MUTED)
+            .children(items)
+    }
+}
+
+/// An empty or error state in the middle of a pane.
+struct Empty {
+    icon: Icon,
+    color: Rgba,
+    title: SharedString,
+    body: SharedString,
+    detail: Option<SharedString>,
+}
+
+impl Empty {
+    fn new(icon: Icon, title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
+        Self {
+            icon,
+            color: theme::DIM,
+            title: title.into(),
+            body: body.into(),
+            detail: None,
+        }
+    }
+
+    fn error(mut self) -> Self {
+        self.color = theme::RED;
+        self
+    }
+
+    fn detail(mut self, detail: impl Into<SharedString>) -> Self {
+        let detail = detail.into();
+        if !detail.is_empty() {
+            self.detail = Some(detail);
+        }
+        self
+    }
+
+    fn render(self) -> AnyElement {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p(px(24.0))
+            .child(
+                div()
+                    .max_w(px(520.0))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(icon(self.icon, 22.0, self.color))
+                    .child(
+                        div()
+                            .mt(px(4.0))
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme::TEXT)
+                            .child(self.title),
+                    )
+                    .when(!self.body.is_empty(), |el| {
+                        el.child(
+                            div()
+                                .text_center()
+                                .text_color(theme::MUTED)
+                                .child(self.body),
+                        )
+                    })
+                    .children(self.detail.map(|d| {
+                        div()
+                            .mt(px(4.0))
+                            .px(px(10.0))
+                            .py(px(6.0))
+                            .rounded(px(6.0))
+                            .bg(theme::HOVER)
+                            .font_family(theme::MONO_FONT)
+                            .text_size(px(11.5))
+                            .text_color(theme::MUTED)
+                            .child(d)
+                    })),
+            )
+            .into_any_element()
+    }
+}
+
+fn error_state(err: &ConnectError, server: &str) -> Empty {
+    match err {
+        ConnectError::AuthPluginMissing { command, path } => Empty::new(
+            Icon::TriangleAlert,
+            "Auth plugin not found",
+            format!(
+                "This context logs in with `{command}`, which is not on the PATH the app sees. \
+                 Install it, or make sure your login shell adds it to PATH."
+            ),
+        )
+        .error()
+        .detail(format!("PATH searched: {path}")),
+        ConnectError::Unreachable(msg) => Empty::new(
+            Icon::Unplug,
+            "Cluster unreachable",
+            "The API server did not answer. Check the network, VPN or that the cluster is running.",
+        )
+        .error()
+        .detail(format!("{server}\n{msg}")),
+        ConnectError::Auth(msg) => Empty::new(
+            Icon::KeyRound,
+            "Authentication failed",
+            "The cluster rejected the credentials.",
+        )
+        .error()
+        .detail(msg.clone()),
+        ConnectError::Forbidden(msg) => Empty::new(
+            Icon::KeyRound,
+            "Not allowed to list pods",
+            "Your user cannot list pods across all namespaces.",
+        )
+        .error()
+        .detail(msg.clone()),
+        ConnectError::Config(msg) => Empty::new(
+            Icon::CircleAlert,
+            "Kubeconfig problem",
+            "This context could not be loaded from your kubeconfig.",
+        )
+        .error()
+        .detail(msg.clone()),
+        ConnectError::UnknownContext => Empty::new(
+            Icon::CircleAlert,
+            "Context not found",
+            "This context is no longer in your kubeconfig. Reload with Cmd-R.",
+        )
+        .error(),
+        ConnectError::Other(msg) => Empty::new(Icon::CircleAlert, "Could not connect", "")
+            .error()
+            .detail(msg.clone()),
+    }
+}
+
+fn tab_bar() -> impl IntoElement {
+    div()
+        .h(px(theme::TAB_BAR_HEIGHT))
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap(px(3.0))
+        .px(px(10.0))
+        .bg(theme::CHROME)
+        .border_b_1()
+        .border_color(theme::BORDER)
+        .child(
+            div()
+                .h(px(29.0))
+                .px(px(10.0))
+                .flex()
+                .items_center()
+                .gap(px(7.0))
+                .rounded(px(7.0))
+                .bg(theme::RAISED)
+                .border_1()
+                .border_color(theme::BORDER)
+                .text_size(px(12.8))
+                .text_color(theme::TEXT)
+                .child(icon(Icon::Box, 13.0, theme::MUTED))
+                .child("Pods"),
+        )
+}
+
+fn state_color(state: &ConnectionState) -> Rgba {
+    match state {
+        ConnectionState::Connecting | ConnectionState::Retrying(_) => theme::AMBER,
+        ConnectionState::Live => theme::GREEN,
+        ConnectionState::Failed(_) => theme::RED,
+    }
+}
+
+fn section_label(text: impl Into<SharedString>) -> impl IntoElement {
+    div()
+        .h(px(30.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .px(px(16.0))
+        .text_size(px(theme::TEXT_LABEL))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme::DIM)
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .text_ellipsis()
+        .child(text.into())
+}
+
+fn sidebar_note(text: &'static str) -> impl IntoElement {
+    div()
+        .h(px(theme::ROW_HEIGHT))
+        .flex()
+        .items_center()
+        .px(px(16.0))
+        .text_color(theme::DIM)
+        .child(text)
+}
+
+fn letter_tile(name: &str) -> impl IntoElement {
+    let letter = name
+        .chars()
+        .find(char::is_ascii_alphanumeric)
+        .map_or('?', |c| c.to_ascii_uppercase());
+    div()
+        .size(px(18.0))
+        .flex_none()
+        .rounded(px(5.0))
+        .bg(tile_color(name))
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(10.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(gpui_kit::white())
+        .child(SharedString::from(letter.to_string()))
+}
+
+/// A stable colour per cluster name.
+fn tile_color(name: &str) -> Rgba {
+    // FNV-1a: tiny, stable across runs and platforms.
+    let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| {
+        (h ^ u32::from(b)).wrapping_mul(0x0100_0193)
+    });
+    let ix = usize::try_from(hash).unwrap_or(0) % theme::TILE_COLORS.len();
+    theme::TILE_COLORS[ix]
+}
+
+fn shared(name: &ContextName) -> SharedString {
+    SharedString::from(Arc::clone(name.as_arc()))
+}
+
+fn dot(color: Rgba, size: f32) -> impl IntoElement {
+    div().flex_none().size(px(size)).rounded_full().bg(color)
+}
+
+fn icon(icon: Icon, size: f32, color: Rgba) -> impl IntoElement {
+    svg()
+        .path(icon.path())
+        .flex_none()
+        .size(px(size))
+        .text_color(color)
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tile_colour_is_stable() {
+        assert_eq!(tile_color("kind-platform"), tile_color("kind-platform"));
+    }
+
+    #[test]
+    fn plural_suffix() {
+        assert_eq!(plural(1), "");
+        assert_eq!(plural(0), "s");
+        assert_eq!(plural(2), "s");
+    }
+}

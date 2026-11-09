@@ -9,6 +9,9 @@ publish.workspace = true
 [dependencies]
 model.workspace = true
 gpui-kit.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
 
 [lints]
 workspace = true

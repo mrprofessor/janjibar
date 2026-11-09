@@ -5,3 +5,18 @@ crates/bridge/src/gpui_tokio.rs
   commit d2a4fb6ded7c470be25d1541281da3882495b65b.
   Copyright 2022 - 2025 Zed Industries, Inc.
   Licensed under the Apache License, Version 2.0.
+
+crates/ui/assets/fonts/geist/
+  Geist, Copyright 2024-2026 The Geist Project Authors
+  (https://github.com/vercel/geist-font), release v1.9.2.
+  Licensed under the SIL Open Font License, Version 1.1. See OFL.txt there.
+
+crates/ui/assets/fonts/jetbrains-mono/
+  JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono), release v2.304.
+  Licensed under the SIL Open Font License, Version 1.1. See OFL.txt there.
+
+crates/ui/assets/icons/
+  Lucide icons, Copyright (c) Lucide Icons and Contributors
+  (https://lucide.dev), copied from gpui-kit-assets 0.9.0.
+  Licensed under the ISC License. See LICENSE there.
