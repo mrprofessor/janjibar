@@ -136,7 +136,10 @@ impl fmt::Display for HelmChart {
 }
 
 /// One revision, decoded from its payload.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// `Debug` redacts `values`, `manifest` and `notes`: they are rendered from
+/// user values and often hold passwords and tokens.
+#[derive(Clone, PartialEq, Eq)]
 pub struct HelmReleaseDetails {
     /// The release's namespace.
     pub namespace: Arc<str>,
@@ -161,4 +164,58 @@ pub struct HelmReleaseDetails {
     pub values: Arc<str>,
     /// The rendered manifest, without hooks.
     pub manifest: Arc<str>,
+}
+
+impl fmt::Debug for HelmReleaseDetails {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HelmReleaseDetails")
+            .field("namespace", &self.namespace)
+            .field("name", &self.name)
+            .field("revision", &self.revision)
+            .field("status", &self.status)
+            .field("chart", &self.chart)
+            .field("first_deployed", &self.first_deployed)
+            .field("updated", &self.updated)
+            .field("description", &self.description)
+            .field("notes", &Redacted(&self.notes))
+            .field("values", &Redacted(&self.values))
+            .field("manifest", &Redacted(&self.manifest))
+            .finish()
+    }
+}
+
+/// Shows only the size of text that may hold secrets.
+struct Redacted<'a>(&'a str);
+
+impl fmt::Debug for Redacted<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<redacted, {} bytes>", self.0.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_hides_values_manifest_and_notes() {
+        let details = HelmReleaseDetails {
+            namespace: "shop".into(),
+            name: "web".into(),
+            revision: 2,
+            status: HelmStatus::Deployed,
+            chart: HelmChart::default(),
+            first_deployed: None,
+            updated: None,
+            description: "Upgrade complete".into(),
+            notes: "admin password: hunter2".into(),
+            values: "dbPassword: hunter2\n".into(),
+            manifest: "kind: Secret\nstringData:\n  token: hunter2\n".into(),
+        };
+        let shown = format!("{details:?}");
+        assert!(!shown.contains("hunter2"), "{shown}");
+        assert!(shown.contains("values: <redacted, 20 bytes>"), "{shown}");
+        assert!(shown.contains("name: \"web\""), "{shown}");
+        assert!(shown.contains("Upgrade complete"), "{shown}");
+    }
 }
