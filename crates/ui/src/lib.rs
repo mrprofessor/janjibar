@@ -5,6 +5,7 @@
 
 pub mod assets;
 mod fonts;
+mod forwards;
 mod log_pane;
 mod log_search;
 mod pod_table;
