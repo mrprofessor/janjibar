@@ -77,6 +77,9 @@ Logs: `RUST_LOG=engine=debug,app=debug nix develop -c cargo run -p app`.
   `gpui-pre` directly unless gpui-kit lacks something; if you must, pin it
   `=0.3.11`.
 - `kube 5.0.0`, `k8s-openapi 0.29.0` with `latest`, `tokio 1.54`.
+- `ghostty-vt =0.8.0` (Ghostty 1.4.0-main at 83fb956), built with Zig
+  0.17.1: `zig_0_17` in `flake.nix` and `mlugg/setup-zig` in CI. Bump the
+  crate and Zig together.
 - YAML is `serde-saphyr`. `serde_yml` and `serde_yaml` are banned in
   `deny.toml`.
 - Commit `Cargo.lock` and `flake.lock`. Bump GPUI as a deliberate change of
