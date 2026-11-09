@@ -1,0 +1,7 @@
+This product includes software developed by third parties.
+
+crates/bridge/src/gpui_tokio.rs
+  Vendored from Zed (https://github.com/zed-industries/zed), crates/gpui_tokio,
+  commit d2a4fb6ded7c470be25d1541281da3882495b65b.
+  Copyright 2022 - 2025 Zed Industries, Inc.
+  Licensed under the Apache License, Version 2.0.

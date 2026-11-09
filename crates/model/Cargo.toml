@@ -1,0 +1,12 @@
+[package]
+name = "model"
+description = "Plain data that crosses the bridge between the engine and the UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

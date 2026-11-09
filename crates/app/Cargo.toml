@@ -1,0 +1,25 @@
+[package]
+name = "app"
+description = "The desktop app binary: startup, windows and menus."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "janjibar"
+path = "src/main.rs"
+
+[dependencies]
+model.workspace = true
+engine.workspace = true
+bridge.workspace = true
+ui.workspace = true
+gpui-kit.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,14 @@
+[package]
+name = "bridge"
+description = "Glue between tokio and GPUI: the vendored gpui_tokio and event channels."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

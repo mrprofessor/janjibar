@@ -1,0 +1,20 @@
+[package]
+name = "engine"
+description = "The tokio side: kubeconfig catalog, clients and watches. Never depends on GPUI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+model.workspace = true
+kube.workspace = true
+k8s-openapi.workspace = true
+tokio.workspace = true
+futures.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+
+[lints]
+workspace = true
