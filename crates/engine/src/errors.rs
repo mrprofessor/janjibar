@@ -39,7 +39,17 @@ pub fn connect_error_from_watch(err: &watcher::Error) -> ConnectError {
     }
 }
 
-pub(crate) fn from_request(err: &kube::Error) -> ConnectError {
+/// Maps an error from a single request, like discovery or a table list.
+pub(crate) fn connect_error_from_request(err: &kube::Error) -> ConnectError {
+    from_request(err)
+}
+
+/// Maps a `Status` the server sent inside a response, like a watch `ERROR`.
+pub(crate) fn connect_error_from_status(code: u16, message: &str) -> ConnectError {
+    from_status(code, message)
+}
+
+fn from_request(err: &kube::Error) -> ConnectError {
     match err {
         kube::Error::Api(status) => from_status(status.code, &status.message),
         kube::Error::HyperError(_) | kube::Error::Service(_) => {

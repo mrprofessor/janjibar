@@ -1,0 +1,88 @@
+{
+  "kind": "Table",
+  "apiVersion": "meta.k8s.io/v1",
+  "metadata": {
+    "resourceVersion": "4242"
+  },
+  "columnDefinitions": [
+    {
+      "name": "Name",
+      "type": "string",
+      "format": "name",
+      "description": "Name must be unique within a namespace. Is required when creating resources, although some resources may allow a client to request the generation of an appropriate name automatically. Name is primarily intended for creation idempotence and configuration definition. Cannot be updated. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names",
+      "priority": 0
+    },
+    {
+      "name": "Spec",
+      "type": "string",
+      "format": "",
+      "description": "The cron spec defining the interval a CronJob is run",
+      "priority": 0
+    },
+    {
+      "name": "Replicas",
+      "type": "integer",
+      "format": "",
+      "description": "The number of jobs launched by the CronJob",
+      "priority": 0
+    },
+    {
+      "name": "Image",
+      "type": "string",
+      "format": "",
+      "description": "The container image the job runs",
+      "priority": 1
+    },
+    {
+      "name": "Age",
+      "type": "date",
+      "format": "",
+      "description": "",
+      "priority": 0
+    }
+  ],
+  "rows": [
+    {
+      "cells": [
+        "nightly",
+        "0 2 * * *",
+        1,
+        "busybox:1.36",
+        "5d"
+      ],
+      "object": {
+        "kind": "PartialObjectMetadata",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": {
+          "name": "nightly",
+          "namespace": "batch-jobs",
+          "uid": "1d0b8a3e-0d0a-4f43-9a55-3d8f6a3b9a01",
+          "resourceVersion": "4101",
+          "generation": 1,
+          "creationTimestamp": "2026-11-04T12:00:00Z"
+        }
+      }
+    },
+    {
+      "cells": [
+        "every-minute",
+        "* * * * */1",
+        null,
+        null,
+        "2m"
+      ],
+      "object": {
+        "kind": "PartialObjectMetadata",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": {
+          "name": "every-minute",
+          "namespace": "batch-jobs",
+          "uid": "1d0b8a3e-0d0a-4f43-9a55-3d8f6a3b9a02",
+          "resourceVersion": "4240",
+          "generation": 1,
+          "creationTimestamp": "2026-11-09T11:58:00Z"
+        }
+      }
+    }
+  ]
+}

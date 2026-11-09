@@ -18,6 +18,10 @@ tempfile.workspace = true
 serde-saphyr.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+http.workspace = true
+jiff = { workspace = true, features = ["tz-system", "tzdb-zoneinfo"] }
 
 
 [dev-dependencies]
@@ -25,7 +29,6 @@ tracing.workspace = true
 # kube uses, so no second copy.
 tokio-tungstenite = "0.30"
 tokio = { workspace = true, features = ["net", "io-util"] }
-serde_json.workspace = true
 tempfile.workspace = true
 
 [lints]

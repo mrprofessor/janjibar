@@ -203,7 +203,7 @@ pub(crate) fn shell_error(err: &kube::Error) -> ShellError {
             404 => ShellError::NotFound(status.message.clone()),
             _ => ShellError::Other(status.message.clone()),
         },
-        other => match crate::errors::from_request(other) {
+        other => match crate::errors::connect_error_from_request(other) {
             ConnectError::Other(message) => ShellError::Other(message),
             connect => ShellError::Connect(connect),
         },

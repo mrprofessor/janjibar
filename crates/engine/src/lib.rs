@@ -7,15 +7,19 @@
 pub mod age;
 pub mod catalog;
 mod client;
+pub mod discovery;
 mod errors;
+pub mod logs;
 pub mod pods;
 pub mod shell;
 pub mod shell_env;
+pub mod tables;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use kube::config::Kubeconfig;
-use model::{Command, ConnectError, ConnectionState, ContextName, Event};
+use model::{Command, ConnectError, ConnectionState, ContextName, Event, LogTabId};
 use tokio::sync::mpsc;
 
 pub use catalog::KubeconfigSources;
@@ -66,6 +70,8 @@ struct Engine {
     /// The selected context's connection and pod watch. Replacing it drops
     /// the old task, which stops the old watch.
     active: Option<AbortOnDrop<()>>,
+    /// Open log tabs. Removing one drops its task and stops its streams.
+    logs: HashMap<LogTabId, AbortOnDrop<()>>,
     /// Node shells' helper pods that are up.
     helpers: shell::HelperPods,
 }
@@ -83,6 +89,7 @@ async fn run(
         clients: ClientPool::default(),
         catalog: model::Catalog::default(),
         active: None,
+        logs: HashMap::new(),
         helpers: shell::HelperPods::default(),
     };
     engine.reload().await;
@@ -91,6 +98,20 @@ async fn run(
             command = commands.recv() => match command {
                 Some(Command::ReloadCatalog) => engine.reload().await,
                 Some(Command::SelectContext(name)) => engine.select(name),
+                Some(Command::OpenLogs(request)) => {
+                    let tab = request.tab;
+                    let kubeconfig = Arc::clone(&engine.kubeconfig);
+                    let task = logs::open(
+                        request,
+                        engine.clients.clone(),
+                        kubeconfig,
+                        engine.events.clone(),
+                    );
+                    engine.logs.insert(tab, task);
+                }
+                Some(Command::CloseLogs(tab)) => {
+                    engine.logs.remove(&tab);
+                }
                 None => break,
             },
             Some(request) = shells.recv() => engine.shell(request),
@@ -145,7 +166,11 @@ impl Engine {
                 state: ConnectionState::Connecting,
             });
             match clients.get(&context, &kubeconfig).await {
-                Ok(client) => pods::watch_pods(context, client, events).await,
+                Ok(client) => {
+                    let kinds =
+                        discovery::send_kinds(context.clone(), client.clone(), events.clone());
+                    tokio::join!(kinds, pods::watch_pods(context, client, events));
+                }
                 Err(err) => {
                     tracing::warn!(%context, "could not connect: {err}");
                     let _ = events.send(Event::Connection {

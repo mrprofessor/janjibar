@@ -21,6 +21,7 @@ crates/
   engine/   tokio side: kubeconfig catalog, clients, watches, row projection
   model/    plain data that crosses the bridge (rows, catalog, events)
   helm/     reads Helm releases from Secrets and ConfigMaps (no GPUI)
+  prometheus/  finds Prometheus, builds PromQL, runs queries (no GPUI)
   bridge/   vendored gpui_tokio; tokio <-> GPUI glue
   ui/       GPUI views: shell, sidebar, tabs, tables, theme, fonts
   term/     terminal pane on libghostty-vt; PTY and byte-stream sources
@@ -40,7 +41,9 @@ nix develop                                   # interactive shell
 nix develop -c cargo build                    # build everything
 nix develop -c cargo run -p app               # run the app (binary: janjibar)
 nix develop -c cargo run -p app -- --context NAME   # connect to NAME at start
+nix develop -c cargo run -p app -- --context NAME --logs NS/POD   # and open its logs
 nix develop -c cargo run -p app --release     # release build, for measuring
+nix develop -c script/bundle-mac              # stripped, signed .app (LTO, slow)
 nix develop -c cargo test --workspace         # all tests (no cluster needed)
 nix develop -c cargo clippy --workspace --all-targets -- -D warnings
 nix develop -c cargo fmt --all                # format (CI runs --check)
@@ -77,6 +80,9 @@ Logs: `RUST_LOG=engine=debug,app=debug nix develop -c cargo run -p app`.
   `gpui-pre` directly unless gpui-kit lacks something; if you must, pin it
   `=0.3.11`.
 - `kube 5.0.0`, `k8s-openapi 0.29.0` with `latest`, `tokio 1.54`.
+- `ghostty-vt =0.8.0` (Ghostty 1.4.0-main at 83fb956), built with Zig
+  0.17.1: `zig_0_17` in `flake.nix` and `mlugg/setup-zig` in CI. Bump the
+  crate and Zig together.
 - YAML is `serde-saphyr`. `serde_yml` and `serde_yaml` are banned in
   `deny.toml`.
 - Commit `Cargo.lock` and `flake.lock`. Bump GPUI as a deliberate change of
