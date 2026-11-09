@@ -31,6 +31,18 @@ nix develop -c cargo run -p engine --example fake_cluster -- --kubeconfig /tmp/f
 KUBECONFIG=/tmp/fake.yaml nix develop -c cargo run -p app --release -- --context fake
 ```
 
+## Build the app bundle
+
+```sh
+nix develop -c script/bundle-mac
+open target/dist/*.app
+```
+
+This makes a whole-program optimised build (several minutes), strips it and
+wraps it in a `.app` signed ad hoc. That is enough to run it on the Mac that
+built it. There is no Developer ID signature or notarization yet, so
+Gatekeeper blocks a copy downloaded on another Mac.
+
 ## Develop
 
 See [AGENTS.md](AGENTS.md) for the layout, commands and rules. It is written
