@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Builds the app with the `dist` profile and wraps it in a signed macOS bundle.
+#
+#   nix develop -c script/bundle-mac            # writes target/dist/<name>.app
+#   nix develop -c script/bundle-mac --no-build # re-bundle the last dist build
+#
+# Environment:
+#   JOBS           cargo build jobs (the dist build is CPU heavy; default 4)
+#   SIGN_IDENTITY  codesign identity; "-" (the default) signs ad hoc
+#
+# Release builds keep their symbols, because stripped proc-macro dylibs fail
+# to load with this toolchain. So the binary is stripped here, after the build.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+build=1
+case "${1:-}" in
+  "") ;;
+  --no-build) build=0 ;;
+  *) echo "usage: script/bundle-mac [--no-build]" >&2; exit 2 ;;
+esac
+
+# The name, id and binary name live in one place each; read them from there.
+brand=crates/model/src/brand.rs
+brand_const() {
+  sed -n "s/^pub const $1: &str = \"\(.*\)\";\$/\1/p" "$brand"
+}
+name=$(brand_const APP_NAME)
+bundle_id=$(brand_const BUNDLE_ID)
+bin=$(sed -n '/^\[\[bin\]\]/,/^\[/s/^name = "\(.*\)"$/\1/p' crates/app/Cargo.toml)
+version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+for v in name bundle_id bin version; do
+  if [[ -z ${!v} ]]; then
+    echo "could not read $v" >&2
+    exit 1
+  fi
+done
+
+if [[ $build == 1 ]]; then
+  cargo build --profile dist --locked -p app -j "${JOBS:-4}"
+fi
+
+out=target/dist
+app="$out/$name.app"
+rm -rf "$app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+
+cp "$out/$bin" "$app/Contents/MacOS/$bin"
+# -x drops local symbols. Rust code is all local here; globals stay for dyld.
+xcrun strip -x "$app/Contents/MacOS/$bin"
+
+cat > "$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>$name</string>
+  <key>CFBundleExecutable</key>
+  <string>$bin</string>
+  <key>CFBundleIdentifier</key>
+  <string>$bundle_id</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>$name</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$version</string>
+  <key>CFBundleVersion</key>
+  <string>$version</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.developer-tools</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+plutil -lint -s "$app/Contents/Info.plist"
+
+# Hardened runtime now, so notarization later needs no new entitlements.
+identity=${SIGN_IDENTITY:--}
+sign_args=(--force --options runtime --sign "$identity")
+if [[ $identity != "-" ]]; then
+  sign_args+=(--timestamp)
+fi
+codesign "${sign_args[@]}" "$app"
+codesign --verify --strict --verbose=2 "$app"
+
+echo "bundle: $app ($(du -sk "$app" | cut -f1) KiB)"
+echo "binary: $(wc -c < "$app/Contents/MacOS/$bin" | tr -d ' ') bytes, stripped"

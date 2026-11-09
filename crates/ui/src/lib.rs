@@ -5,6 +5,8 @@
 
 pub mod assets;
 mod fonts;
+mod log_pane;
+mod log_search;
 mod pod_table;
 pub mod theme;
 mod workspace;
@@ -14,6 +16,15 @@ use gpui_kit::{App, KeyBinding};
 pub use workspace::{CommandSink, Workspace};
 
 gpui_kit::actions!(app, [Quit, ReloadKubeconfig]);
+gpui_kit::actions!(
+    logs,
+    [
+        /// Open a log pane for the selected pod.
+        OpenLogs,
+        /// Move focus to the log pane's search field.
+        FocusLogSearch
+    ]
+);
 
 /// Registers fonts, the theme and key bindings. Call once, after
 /// `gpui_kit::init`.
@@ -25,5 +36,7 @@ pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-r", ReloadKubeconfig, None),
+        KeyBinding::new("l", OpenLogs, Some("PodTable")),
+        KeyBinding::new("cmd-f", FocusLogSearch, Some("LogPane")),
     ]);
 }

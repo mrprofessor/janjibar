@@ -8,18 +8,26 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::Size;
 use gpui_kit::component::table::{DataTable, TableState};
 use gpui_kit::{
-    AnyElement, App, Context, Entity, FontWeight, Rgba, SharedString, Task, Window, div,
-    prelude::*, px, svg,
+    AnyElement, App, Context, Entity, FontWeight, Rgba, SharedString, Subscription, Task, Window,
+    div, prelude::*, px, relative, svg,
 };
-use model::{Catalog, Command, ConnectError, ConnectionState, ContextInfo, ContextName, Event};
+use model::{
+    Catalog, Command, ConnectError, ConnectionState, Containers, ContextInfo, ContextName, Event,
+    LogOptions, LogRequest, LogTabId, LogTarget,
+};
 use tokio::sync::mpsc;
 
+use crate::OpenLogs;
 use crate::assets::Icon;
+use crate::log_pane::{LogPane, LogPaneEvent};
 use crate::pod_table::{self, PodTable};
 use crate::theme;
 
 /// Room for the macOS window buttons at the top left of the sidebar.
 const TRAFFIC_LIGHTS_WIDTH: f32 = 80.0;
+
+/// Share of the work area's height the log pane takes under the pods.
+const LOG_PANE_SHARE: f32 = 0.42;
 
 /// Sends a command to the engine.
 pub type CommandSink = Rc<dyn Fn(Command)>;
@@ -35,7 +43,15 @@ pub struct Workspace {
     table: Entity<TableState<PodTable>>,
     /// Whether a snapshot for the selected context has arrived.
     has_rows: bool,
+    /// The open log pane, under the pods.
+    logs: Option<OpenLogPane>,
+    last_log_tab: u64,
     _events: Task<()>,
+}
+
+struct OpenLogPane {
+    pane: Entity<LogPane>,
+    _closed: Subscription,
 }
 
 impl Workspace {
@@ -66,6 +82,8 @@ impl Workspace {
             states: HashMap::new(),
             table,
             has_rows: false,
+            logs: None,
+            last_log_tab: 0,
             _events: events_task,
         }
     }
@@ -77,6 +95,7 @@ impl Workspace {
         }
         self.selected = Some(context.clone());
         self.has_rows = false;
+        self.close_logs(cx);
         pod_table::set_rows(&self.table, Vec::new().into(), cx);
         (self.send)(Command::SelectContext(context));
         cx.notify();
@@ -88,8 +107,88 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Opens a log pane for the pod selected in the table, replacing any
+    /// open one.
+    pub fn open_logs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((namespace, name)) = pod_table::selected_pod(&self.table, cx) else {
+            return;
+        };
+        self.open_pod_logs(namespace, name, window, cx);
+    }
+
+    /// Opens a log pane for a pod in the selected context, replacing any
+    /// open one.
+    pub fn open_pod_logs(
+        &mut self,
+        namespace: impl Into<Arc<str>>,
+        name: impl Into<Arc<str>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(context) = self.selected.clone() else {
+            return;
+        };
+        let target = LogTarget::Pod {
+            namespace: namespace.into(),
+            name: name.into(),
+        };
+        if self
+            .logs
+            .as_ref()
+            .is_some_and(|open| open.pane.read(cx).target() == &target)
+        {
+            return;
+        }
+        self.close_logs(cx);
+        self.last_log_tab += 1;
+        let tab = LogTabId::new(self.last_log_tab);
+        (self.send)(Command::OpenLogs(LogRequest {
+            tab,
+            context,
+            target: target.clone(),
+            containers: Containers::All,
+            options: LogOptions::default(),
+        }));
+        let pane = cx.new(|cx| LogPane::new(tab, target, window, cx));
+        let closed = cx.subscribe(&pane, |this, _, event: &LogPaneEvent, cx| match event {
+            LogPaneEvent::Close => this.close_logs(cx),
+        });
+        self.logs = Some(OpenLogPane {
+            pane,
+            _closed: closed,
+        });
+        cx.notify();
+    }
+
+    /// Closes the log pane and stops its streams.
+    pub fn close_logs(&mut self, cx: &mut Context<Self>) {
+        if let Some(open) = self.logs.take() {
+            (self.send)(Command::CloseLogs(open.pane.read(cx).tab()));
+            cx.notify();
+        }
+    }
+
+    /// The open log pane, if it shows `tab`.
+    fn log_pane(&self, tab: LogTabId, cx: &App) -> Option<Entity<LogPane>> {
+        let open = self.logs.as_ref()?;
+        (open.pane.read(cx).tab() == tab).then(|| open.pane.clone())
+    }
+
     fn apply(&mut self, event: Event, cx: &mut Context<Self>) {
         match event {
+            // Log events only redraw the log pane.
+            Event::Logs(chunk) => {
+                if let Some(pane) = self.log_pane(chunk.tab, cx) {
+                    pane.update(cx, |pane, cx| pane.push(chunk.lines, cx));
+                }
+                return;
+            }
+            Event::LogState { tab, state } => {
+                if let Some(pane) = self.log_pane(tab, cx) {
+                    pane.update(cx, |pane, cx| pane.set_state(state, cx));
+                }
+                return;
+            }
             Event::Catalog(catalog) => self.catalog = Some(catalog),
             Event::Connection { context, state } => {
                 self.states.insert(context, state);
@@ -101,6 +200,8 @@ impl Workspace {
                 self.has_rows = true;
                 pod_table::set_rows(&self.table, snapshot.rows, cx);
             }
+            // The kinds sidebar and generic tables arrive with the watch hub.
+            Event::Kinds(_) | Event::Table(_) => return,
         }
         cx.notify();
     }
@@ -136,7 +237,25 @@ impl Render for Workspace {
                             .flex_1()
                             .min_h_0()
                             .p(px(theme::PANE_GAP))
-                            .child(self.render_pane(cx)),
+                            .flex()
+                            .flex_col()
+                            .gap(px(theme::PANE_GAP))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .key_context("PodTable")
+                                    .on_action(cx.listener(|this, _: &OpenLogs, window, cx| {
+                                        this.open_logs(window, cx);
+                                    }))
+                                    .child(self.render_pane(cx)),
+                            )
+                            .children(self.logs.as_ref().map(|open| {
+                                div()
+                                    .h(relative(LOG_PANE_SHARE))
+                                    .flex_none()
+                                    .child(open.pane.clone())
+                            })),
                     )
                     .child(self.render_status_bar(cx)),
             )
@@ -382,8 +501,9 @@ impl Workspace {
 
 // Tabs, pane and status bar.
 impl Workspace {
-    fn render_pane(&self, cx: &App) -> impl IntoElement {
+    fn render_pane(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let count = self.pod_count(cx);
+        let pod_selected = pod_table::selected_pod(&self.table, cx).is_some();
         let scope: SharedString = if self.selected.is_some() {
             "all namespaces".into()
         } else {
@@ -426,6 +546,37 @@ impl Workspace {
                                 .font_family(theme::MONO_FONT)
                                 .text_color(theme::DIM)
                                 .child(format!("{count} pod{}", plural(count))),
+                        )
+                    })
+                    .when(pod_selected, |el| {
+                        el.child(
+                            div()
+                                .id("open-logs")
+                                .debug_selector(|| "open-logs".to_owned())
+                                .h(px(22.0))
+                                .px(px(7.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .rounded(px(6.0))
+                                .cursor_pointer()
+                                .text_color(theme::TERM_TEXT)
+                                .hover(|s| s.bg(theme::HOVER))
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.open_logs(window, cx)),
+                                )
+                                .child("Logs")
+                                .child(
+                                    div()
+                                        .px(px(4.0))
+                                        .rounded(px(4.0))
+                                        .border_1()
+                                        .border_color(theme::BORDER)
+                                        .font_family(theme::MONO_FONT)
+                                        .text_size(px(10.5))
+                                        .text_color(theme::DIM)
+                                        .child("L"),
+                                ),
                         )
                     }),
             )

@@ -117,6 +117,16 @@ impl PodTable {
     }
 }
 
+/// The selected pod's namespace and name.
+pub fn selected_pod(
+    table: &Entity<TableState<PodTable>>,
+    cx: &App,
+) -> Option<(Arc<str>, Arc<str>)> {
+    let state = table.read(cx);
+    let row = state.delegate().rows.get(state.selected_row()?)?;
+    Some((Arc::clone(&row.namespace), Arc::clone(&row.name)))
+}
+
 /// Swaps in a new snapshot, keeping the selected pod selected by name.
 pub fn set_rows(table: &Entity<TableState<PodTable>>, rows: Arc<[PodRow]>, cx: &mut App) {
     table.update(cx, |state, cx| {

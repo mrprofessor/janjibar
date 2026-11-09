@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use gpui_kit::{AssetSource, SharedString};
 
 /// Icons the app ships itself, from Lucide (ISC, see `assets/icons/LICENSE`).
-const ICONS: [(&str, &[u8]); 17] = [
+const ICONS: [(&str, &[u8]); 18] = [
     (
         "icons/app/bell.svg",
         include_bytes!("../assets/icons/bell.svg"),
@@ -53,6 +53,10 @@ const ICONS: [(&str, &[u8]); 17] = [
     (
         "icons/app/loader-circle.svg",
         include_bytes!("../assets/icons/loader-circle.svg"),
+    ),
+    (
+        "icons/app/logs.svg",
+        include_bytes!("../assets/icons/logs.svg"),
     ),
     (
         "icons/app/network.svg",
@@ -114,11 +118,17 @@ pub enum Icon {
     Layers,
     LayoutDashboard,
     LoaderCircle,
+    Logs,
     Network,
     Plug,
     Server,
     TriangleAlert,
     Unplug,
+    // From gpui-kit's bundle, which `Assets` falls back to.
+    ChevronDown,
+    ChevronUp,
+    Close,
+    Search,
 }
 
 impl Icon {
@@ -137,11 +147,16 @@ impl Icon {
             Self::Layers => "icons/app/layers.svg",
             Self::LayoutDashboard => "icons/app/layout-dashboard.svg",
             Self::LoaderCircle => "icons/app/loader-circle.svg",
+            Self::Logs => "icons/app/logs.svg",
             Self::Network => "icons/app/network.svg",
             Self::Plug => "icons/app/plug.svg",
             Self::Server => "icons/app/server.svg",
             Self::TriangleAlert => "icons/app/triangle-alert.svg",
             Self::Unplug => "icons/app/unplug.svg",
+            Self::ChevronDown => "icons/chevron-down.svg",
+            Self::ChevronUp => "icons/chevron-up.svg",
+            Self::Close => "icons/close.svg",
+            Self::Search => "icons/search.svg",
         }
     }
 }
@@ -165,11 +180,16 @@ mod tests {
             Icon::Layers,
             Icon::LayoutDashboard,
             Icon::LoaderCircle,
+            Icon::Logs,
             Icon::Network,
             Icon::Plug,
             Icon::Server,
             Icon::TriangleAlert,
             Icon::Unplug,
+            Icon::ChevronDown,
+            Icon::ChevronUp,
+            Icon::Close,
+            Icon::Search,
         ];
         for icon in all {
             let loaded = Assets.load(icon.path()).unwrap();
