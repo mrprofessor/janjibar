@@ -7423,6 +7423,7 @@ version = "0.1.0"
 dependencies = [
  "ghostty-vt",
  "gpui-kit",
+ "gpui-pre",
  "libc",
  "nix",
  "portable-pty",
