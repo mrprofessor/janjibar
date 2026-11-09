@@ -1,0 +1,31 @@
+[package]
+name = "term"
+description = "A terminal pane for GPUI on libghostty-vt, fed by any byte source."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+tracing.workspace = true
+# libghostty-vt, built from Ghostty's pinned source with Zig 0.17.
+ghostty-vt = "=0.8.0"
+portable-pty = "0.9"
+# Safe wrappers for the pty's descriptors, signals and sessions.
+rustix = { version = "1", features = ["event", "fs", "pipe", "process", "std", "termios"] }
+# The passwd entry, for the user's shell. Same version portable-pty uses.
+nix = { version = "0.28", default-features = false, features = ["user"] }
+# The macOS process table, which has no safe wrapper.
+libc = "0.2"
+
+[dev-dependencies]
+# GPUI's test support for the pane tests, turned on through gpui-pre as the
+# ui crate does (see the gpui skill). It is the crate the kit re-exports.
+gpui-pre = { version = "=0.3.11", features = ["test-support"] }
+# The shell example draws with the app's tokens and fonts.
+ui.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

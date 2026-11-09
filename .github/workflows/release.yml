@@ -1,0 +1,137 @@
+name: Release
+
+# Builds the macOS app bundle with script/bundle-mac and zips it.
+# - Manual runs (workflow_dispatch) keep the zip as a workflow artifact.
+# - Pushing a tag like v0.1.0 also attaches it to that tag's GitHub release.
+# The app is signed ad hoc until there is a Developer ID; notarization later.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    # Explicit bash runs with -eo pipefail.
+    shell: bash
+
+jobs:
+  bundle:
+    name: Bundle (macOS arm64)
+    runs-on: macos-15
+    # The dist profile is fat LTO with one codegen unit: slow, but bounded.
+    timeout-minutes: 90
+    outputs:
+      name: ${{ steps.package.outputs.name }}
+      zip: ${{ steps.package.outputs.zip }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check the tag matches the crate version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the workspace version $version (expected v$version)"
+            exit 1
+          fi
+
+      - name: Bundle
+        # The hosted runner has 3 cores; the script defaults to 4 jobs.
+        env:
+          JOBS: "3"
+        run: script/bundle-mac
+
+      - name: Zip
+        id: package
+        run: |
+          shopt -s nullglob
+          apps=(target/dist/*.app)
+          if [[ ${#apps[@]} -ne 1 ]]; then
+            echo "::error::expected one app bundle in target/dist, found ${#apps[@]}"
+            exit 1
+          fi
+          app=${apps[0]}
+          name=$(basename "$app" .app)
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            label=$GITHUB_REF_NAME
+          else
+            label="v$version-${GITHUB_SHA::7}"
+          fi
+          zip="$name-$label-macos-arm64.zip"
+          mkdir -p dist
+          # ditto keeps the bundle's symlinks, permissions and signature intact.
+          ditto -c -k --sequesterRsrc --keepParent "$app" "dist/$zip"
+          (cd dist && shasum -a 256 "$zip" > "$zip.sha256")
+          # Prove the zip round-trips to a bundle whose signature still verifies.
+          check=$(mktemp -d)
+          ditto -x -k "dist/$zip" "$check"
+          codesign --verify --strict --verbose=2 "$check/$name.app"
+          cat "dist/$zip.sha256"
+          {
+            echo "name=$name"
+            echo "zip=$zip"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.zip }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Attach to the release
+    if: github.ref_type == 'tag'
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.bundle.outputs.zip }}
+          path: dist
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NAME: ${{ needs.bundle.outputs.name }}
+          ZIP: ${{ needs.bundle.outputs.zip }}
+        run: |
+          tag=$GITHUB_REF_NAME
+          assets=("dist/$ZIP" "dist/$ZIP.sha256")
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # A re-run replaces the assets of the existing release.
+            gh release upload "$tag" "${assets[@]}" --clobber
+            exit 0
+          fi
+          notes=$(mktemp)
+          cat > "$notes" <<EOF
+          Apple silicon build, signed ad hoc and not notarized yet. macOS
+          quarantines downloaded apps, so after unzipping run:
+
+              xattr -dr com.apple.quarantine "$NAME.app"
+
+          The .sha256 file holds the zip's checksum.
+          EOF
+          flags=(--verify-tag --title "$NAME $tag" --notes-file "$notes" --generate-notes)
+          # Tags like v0.2.0-rc.1 are pre-releases.
+          if [[ "$tag" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$tag" "${assets[@]}" "${flags[@]}"
