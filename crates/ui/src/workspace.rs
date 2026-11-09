@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 
 use crate::OpenLogs;
 use crate::assets::Icon;
+use crate::helm::{self, HelmView};
 use crate::log_pane::{LogPane, LogPaneEvent};
 use crate::pod_table::{self, PodTable};
 use crate::theme;
@@ -31,6 +32,13 @@ const LOG_PANE_SHARE: f32 = 0.42;
 
 /// Sends a command to the engine.
 pub type CommandSink = Rc<dyn Fn(Command)>;
+
+/// What the work area shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MainView {
+    Pods,
+    Helm,
+}
 
 /// The root view of the main window.
 pub struct Workspace {
@@ -46,6 +54,8 @@ pub struct Workspace {
     /// The open log pane, under the pods.
     logs: Option<OpenLogPane>,
     last_log_tab: u64,
+    view: MainView,
+    helm: Entity<HelmView>,
     _events: Task<()>,
 }
 
@@ -74,6 +84,7 @@ impl Workspace {
                 }
             }
         });
+        let helm = cx.new(|cx| HelmView::new(Rc::clone(&send), window, cx));
         Self {
             app_name: app_name.into(),
             send,
@@ -84,6 +95,8 @@ impl Workspace {
             has_rows: false,
             logs: None,
             last_log_tab: 0,
+            view: MainView::Pods,
+            helm,
             _events: events_task,
         }
     }
@@ -96,6 +109,9 @@ impl Workspace {
         self.selected = Some(context.clone());
         self.has_rows = false;
         self.close_logs(cx);
+        let helm_context = Some(context.clone());
+        self.helm
+            .update(cx, |helm, cx| helm.set_context(helm_context, cx));
         pod_table::set_rows(&self.table, Vec::new().into(), cx);
         (self.send)(Command::SelectContext(context));
         cx.notify();
@@ -202,9 +218,21 @@ impl Workspace {
             }
             // The kinds sidebar and generic tables arrive with the watch hub.
             Event::Kinds(_) | Event::Table(_) => return,
-            // The Helm view arrives in a later commit.
-            Event::Helm(_) => return,
+            Event::Helm(event) => self.helm.update(cx, |helm, cx| helm.apply(event, cx)),
         }
+        cx.notify();
+    }
+
+    /// Switches the work area. The Helm watch runs only while it shows.
+    fn show(&mut self, view: MainView, cx: &mut Context<Self>) {
+        if self.view == view {
+            return;
+        }
+        self.view = view;
+        self.helm.update(cx, |helm, cx| match view {
+            MainView::Helm => helm.open(cx),
+            MainView::Pods => helm.close(cx),
+        });
         cx.notify();
     }
 
@@ -233,7 +261,10 @@ impl Render for Workspace {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .child(tab_bar())
+                    .child(match self.view {
+                        MainView::Pods => tab_bar(Icon::Box.path(), "Pods"),
+                        MainView::Helm => tab_bar(helm::HELM_ICON.path(), "Helm releases"),
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -242,22 +273,34 @@ impl Render for Workspace {
                             .flex()
                             .flex_col()
                             .gap(px(theme::PANE_GAP))
-                            .child(
-                                div()
+                            .child(match self.view {
+                                MainView::Pods => div()
                                     .flex_1()
                                     .min_h_0()
                                     .key_context("PodTable")
                                     .on_action(cx.listener(|this, _: &OpenLogs, window, cx| {
                                         this.open_logs(window, cx);
                                     }))
-                                    .child(self.render_pane(cx)),
-                            )
-                            .children(self.logs.as_ref().map(|open| {
-                                div()
-                                    .h(relative(LOG_PANE_SHARE))
-                                    .flex_none()
-                                    .child(open.pane.clone())
-                            })),
+                                    .child(self.render_pane(cx))
+                                    .into_any_element(),
+                                MainView::Helm => div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .child(self.helm.clone())
+                                    .into_any_element(),
+                            })
+                            // The log pane belongs to the pod list.
+                            .children(
+                                self.logs
+                                    .as_ref()
+                                    .filter(|_| self.view == MainView::Pods)
+                                    .map(|open| {
+                                        div()
+                                            .h(relative(LOG_PANE_SHARE))
+                                            .flex_none()
+                                            .child(open.pane.clone())
+                                    }),
+                            ),
                     )
                     .child(self.render_status_bar(cx)),
             )
@@ -384,7 +427,7 @@ impl Workspace {
             .child(div().flex_none().child(right))
     }
 
-    fn render_kinds(&self, cx: &App) -> impl IntoElement {
+    fn render_kinds(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let title: SharedString = self
             .selected
             .as_ref()
@@ -416,19 +459,28 @@ impl Workspace {
                     .flex_col()
                     .children(kinds.into_iter().map(|(kind_icon, label)| {
                         let live = label == "Pods";
-                        let active = live && connected;
+                        let active = live && connected && self.view == MainView::Pods;
                         let count = if live && self.has_rows {
                             pods.map(|n| n.to_string())
                         } else {
                             None
                         };
                         div()
+                            .id(label)
+                            .debug_selector(move || format!("sidebar-{label}"))
                             .h(px(28.0))
                             .flex()
                             .items_center()
                             .gap(px(9.0))
                             .px(px(8.0))
                             .rounded(px(theme::ROW_RADIUS))
+                            .when(live && connected && !active, |el| {
+                                el.cursor_pointer().hover(|s| s.bg(theme::HOVER)).on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.show(MainView::Pods, cx);
+                                    }),
+                                )
+                            })
                             .text_color(if active {
                                 theme::TEXT
                             } else if live {
@@ -450,7 +502,19 @@ impl Workspace {
                                     .text_color(theme::DIM)
                                     .child(n)
                             }))
-                    })),
+                    }))
+                    .child(
+                        helm::sidebar_entry(
+                            self.view == MainView::Helm,
+                            connected,
+                            self.helm.read(cx).release_count(),
+                        )
+                        .when(connected, |el| {
+                            el.on_click(cx.listener(|this, _, _, cx| {
+                                this.show(MainView::Helm, cx);
+                            }))
+                        }),
+                    ),
             )
     }
 
@@ -843,7 +907,7 @@ fn error_state(err: &ConnectError, server: &str) -> Empty {
     }
 }
 
-fn tab_bar() -> impl IntoElement {
+fn tab_bar(icon_path: &'static str, label: &'static str) -> impl IntoElement {
     div()
         .h(px(theme::TAB_BAR_HEIGHT))
         .flex_none()
@@ -867,8 +931,14 @@ fn tab_bar() -> impl IntoElement {
                 .border_color(theme::BORDER)
                 .text_size(px(12.8))
                 .text_color(theme::TEXT)
-                .child(icon(Icon::Box, 13.0, theme::MUTED))
-                .child("Pods"),
+                .child(
+                    svg()
+                        .path(icon_path)
+                        .flex_none()
+                        .size(px(13.0))
+                        .text_color(theme::MUTED),
+                )
+                .child(label),
         )
 }
 

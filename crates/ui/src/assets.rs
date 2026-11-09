@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use gpui_kit::{AssetSource, SharedString};
 
 /// Icons the app ships itself, from Lucide (ISC, see `assets/icons/LICENSE`).
-const ICONS: [(&str, &[u8]); 18] = [
+const ICONS: [(&str, &[u8]); 19] = [
     (
         "icons/app/bell.svg",
         include_bytes!("../assets/icons/bell.svg"),
@@ -71,6 +71,10 @@ const ICONS: [(&str, &[u8]); 18] = [
         include_bytes!("../assets/icons/server.svg"),
     ),
     (
+        "icons/app/ship-wheel.svg",
+        include_bytes!("../assets/icons/ship-wheel.svg"),
+    ),
+    (
         "icons/app/triangle-alert.svg",
         include_bytes!("../assets/icons/triangle-alert.svg"),
     ),
@@ -122,6 +126,7 @@ pub enum Icon {
     Network,
     Plug,
     Server,
+    ShipWheel,
     TriangleAlert,
     Unplug,
     // From gpui-kit's bundle, which `Assets` falls back to.
@@ -151,6 +156,7 @@ impl Icon {
             Self::Network => "icons/app/network.svg",
             Self::Plug => "icons/app/plug.svg",
             Self::Server => "icons/app/server.svg",
+            Self::ShipWheel => "icons/app/ship-wheel.svg",
             Self::TriangleAlert => "icons/app/triangle-alert.svg",
             Self::Unplug => "icons/app/unplug.svg",
             Self::ChevronDown => "icons/chevron-down.svg",
@@ -184,6 +190,7 @@ mod tests {
             Icon::Network,
             Icon::Plug,
             Icon::Server,
+            Icon::ShipWheel,
             Icon::TriangleAlert,
             Icon::Unplug,
             Icon::ChevronDown,
