@@ -183,9 +183,10 @@ Changes to this plan, newest first.
   The engine re-projects once a second and still sends a snapshot only when
   the rows differ, so a quiet cluster wakes the UI rarely (pods under two
   minutes old show seconds and update each second).
-- **GPUI view tests are blocked.** gpui-kit's `test-support` feature makes
-  Cargo resolve `gpui-fast`, which pins `taffy =0.15.0` and conflicts with
-  the rest of the tree. Retry on the next gpui-kit release.
+- **GPUI view tests run on gpui-pre's test support.** gpui-kit's
+  `test-support` puts `gpui-fast` in the lockfile, whose exact pins conflict
+  with ours (longbridge/gpui-kit#3865), so `ui` takes `gpui-pre =0.3.11` with
+  `test-support` as a dev-dependency instead.
 - **Release builds keep symbols.** Cargo's default release strip breaks
   proc-macro dylibs with this toolchain on macOS 27. Strip at packaging time.
 - **Memory needs a window size.** The first slice measured 250 MB physical

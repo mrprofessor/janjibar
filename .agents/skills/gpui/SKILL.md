@@ -24,10 +24,11 @@ See `references/source-map.md` for where to look.
   which wraps the view in the kit's `Root` (needed for popovers, dialogs and
   notifications). The run closure is `'static`: you cannot return values out
   of it, so log errors and `cx.quit()`.
-- Do not add `gpui-pre` or `gpui-pre-platform` directly. gpui-kit already
-  enables `runtime_shaders` (no Metal toolchain needed) and `font-kit`
-  (without it, text lays out with no glyphs). If you ever must depend on them,
-  pin `=0.3.11` and keep both features.
+- Do not add `gpui-pre` or `gpui-pre-platform` as normal dependencies.
+  gpui-kit already enables `runtime_shaders` (no Metal toolchain needed) and
+  `font-kit` (without it, text lays out with no glyphs). If you ever must
+  depend on them, pin `=0.3.11` and keep both features. The one exception
+  today is `gpui-pre` as a dev-dependency for test support (see Testing).
 - Use the `gpui_kit::actions!` macro, not GPUI's: GPUI's derive path assumes a
   crate named `gpui`.
 
