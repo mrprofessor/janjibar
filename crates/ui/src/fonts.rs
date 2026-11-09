@@ -1,4 +1,4 @@
-//! Bundled fonts: Geist for the interface, `JetBrains Mono` for names and
+//! Bundled fonts: Geist for the interface, JetBrains Mono for names and
 //! numbers. Both are under the SIL Open Font License 1.1; the license files
 //! sit next to the fonts in `assets/fonts`.
 

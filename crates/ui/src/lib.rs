@@ -4,23 +4,27 @@
 //! sends `model::Command`s back through a [`CommandSink`].
 
 pub mod assets;
+mod empty;
 mod fonts;
 mod forwards;
+mod inspector;
 mod log_pane;
 mod log_search;
-mod pod_table;
+mod resource_table;
+mod sidebar;
 pub mod theme;
+mod widgets;
 mod workspace;
 
 use gpui_kit::{App, KeyBinding};
 
-pub use workspace::{CommandSink, Workspace};
+pub use workspace::{CommandSink, Workspace, WorkspaceEvent};
 
 gpui_kit::actions!(app, [Quit, ReloadKubeconfig]);
 gpui_kit::actions!(
     logs,
     [
-        /// Open a log pane for the selected pod.
+        /// Open a log pane for the pod selected in the table.
         OpenLogs,
         /// Move focus to the log pane's search field.
         FocusLogSearch
@@ -37,7 +41,7 @@ pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-r", ReloadKubeconfig, None),
-        KeyBinding::new("l", OpenLogs, Some("PodTable")),
+        KeyBinding::new("l", OpenLogs, Some("ResourceTable")),
         KeyBinding::new("cmd-f", FocusLogSearch, Some("LogPane")),
     ]);
 }

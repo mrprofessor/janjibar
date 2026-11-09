@@ -15,11 +15,23 @@ mod support {
 use std::sync::Arc;
 
 use gpui_kit::TestAppContext;
+use model::resource::Kind;
 use model::{
     Clock, Command, ConnectionState, Containers, ContextName, Event, LineKind, LogChunk, LogLine,
-    LogOptions, LogRequest, LogSource, LogState, LogTabId, LogTarget,
+    LogOptions, LogRequest, LogSource, LogState, LogTabId, LogTarget, SubscriptionId,
 };
 use support::harness::{Harness, catalog, pod, snapshot};
+
+/// Clicks the crash-looping pod. The click also opens the inspector; that
+/// command is checked here and dropped.
+fn select_crashloop(h: &mut Harness<'_>) {
+    h.click("row-faults/crashloop-x2kqp");
+    let commands = h.take_commands();
+    assert!(
+        matches!(commands.as_slice(), [Command::Inspect(Some(_))]),
+        "got {commands:?}"
+    );
+}
 
 /// A workspace connected to `kind-platform` with two pods on screen.
 fn connected(cx: &mut TestAppContext) -> Harness<'_> {
@@ -69,11 +81,11 @@ fn the_logs_button_opens_a_pane_for_the_selected_pod(cx: &mut TestAppContext) {
     let mut h = connected(cx);
     assert!(h.bounds("open-logs").is_none(), "no pod selected yet");
 
-    h.click("pod-faults/crashloop-x2kqp");
+    select_crashloop(&mut h);
     h.click("open-logs");
     assert_eq!(h.take_commands(), [open_request(1)]);
     let pane = h.bounds("log-pane").expect("the pane is drawn");
-    let table = h.bounds("pod-shop/web-0").expect("the pods stay");
+    let table = h.bounds("row-shop/web-0").expect("the pods stay");
     assert!(pane.origin.y > table.origin.y, "logs sit under the pods");
 
     // Lines from the engine are drawn in order.
@@ -114,7 +126,7 @@ fn the_logs_button_opens_a_pane_for_the_selected_pod(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn l_opens_logs_from_the_pod_table(cx: &mut TestAppContext) {
     let mut h = connected(cx);
-    h.click("pod-faults/crashloop-x2kqp");
+    select_crashloop(&mut h);
     h.cx.simulate_keystrokes("l");
     assert_eq!(h.take_commands(), [open_request(1)]);
     assert!(h.bounds("log-pane").is_some());
@@ -123,7 +135,7 @@ fn l_opens_logs_from_the_pod_table(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn switching_context_closes_the_pane(cx: &mut TestAppContext) {
     let mut h = connected(cx);
-    h.click("pod-faults/crashloop-x2kqp");
+    select_crashloop(&mut h);
     h.click("open-logs");
     h.take_commands();
 
@@ -133,6 +145,14 @@ fn switching_context_closes_the_pane(cx: &mut TestAppContext) {
         [
             Command::CloseLogs(LogTabId::new(1)),
             Command::SelectContext(ContextName::new("prod-eu")),
+            Command::Inspect(None),
+            Command::Unsubscribe(SubscriptionId(1)),
+            Command::Subscribe {
+                id: SubscriptionId(2),
+                context: ContextName::new("prod-eu"),
+                resource: Kind::Pod.resource(),
+                namespace: None,
+            },
         ]
     );
     assert!(h.bounds("log-pane").is_none());
@@ -141,7 +161,7 @@ fn switching_context_closes_the_pane(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn toggles_stay_in_the_view(cx: &mut TestAppContext) {
     let mut h = connected(cx);
-    h.click("pod-faults/crashloop-x2kqp");
+    select_crashloop(&mut h);
     h.click("open-logs");
     h.take_commands();
     h.send(Event::Logs(LogChunk {

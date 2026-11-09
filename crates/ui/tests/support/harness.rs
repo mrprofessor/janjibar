@@ -9,8 +9,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::{Bounds, Modifiers, Pixels, TestAppContext, VisualTestContext};
+use model::resource::Kind;
 use model::{
-    Catalog, Command, ContextInfo, ContextName, Event, Health, PodRow, PodSnapshot, Ready,
+    Catalog, Column, ColumnType, Command, ConnectionState, ContextInfo, ContextName, Event, Health,
+    TableRow, TableSnapshot,
 };
 use tokio::sync::mpsc;
 use ui::{CommandSink, Workspace};
@@ -94,25 +96,47 @@ pub fn catalog(names: &[&str]) -> Catalog {
     }
 }
 
-/// A running, ready pod.
-pub fn pod(namespace: &str, name: &str) -> PodRow {
-    PodRow {
-        namespace: namespace.into(),
+/// The pod table's columns, as the engine sends them.
+pub fn pod_columns() -> Arc<[Column]> {
+    let col = |name: &str, ty: ColumnType, format: &str| Column {
         name: name.into(),
-        ready: Ready { ready: 1, total: 1 },
-        status: "Running".into(),
+        ty,
+        format: format.into(),
+        priority: 0,
+        description: "".into(),
+    };
+    vec![
+        col("Name", ColumnType::String, "name"),
+        col("Ready", ColumnType::String, ""),
+        col("Status", ColumnType::String, "status"),
+        col("Age", ColumnType::Date, ""),
+    ]
+    .into()
+}
+
+/// A running, ready pod row.
+pub fn pod(namespace: &str, name: &str) -> TableRow {
+    TableRow {
+        name: name.into(),
+        namespace: Some(namespace.into()),
+        uid: format!("uid-{namespace}-{name}").into(),
+        created: None,
+        cells: Arc::from([name.into(), "1/1".into(), "Running".into(), "3d".into()]),
+        details: Arc::from([]),
         health: Health::Good,
-        restarts: 0,
-        age: "3d".into(),
-        node: "node-1".into(),
     }
 }
 
-/// A pod snapshot for `context`. Rows must already be sorted, as the engine
-/// sends them.
-pub fn snapshot(context: &str, rows: Vec<PodRow>) -> Event {
-    Event::Pods(PodSnapshot {
+/// A live pod table snapshot for `context`, listing all namespaces. Rows
+/// must already be sorted, as the engine sends them.
+pub fn snapshot(context: &str, rows: Vec<TableRow>) -> Event {
+    Event::Table(TableSnapshot {
         context: ContextName::new(context),
+        resource: Kind::Pod.resource(),
+        namespace: None,
+        state: ConnectionState::Live,
+        columns: pod_columns(),
+        detail_columns: Arc::from([]),
         rows: Arc::from(rows),
     })
 }

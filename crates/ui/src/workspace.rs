@@ -1,4 +1,8 @@
 //! The main window: sidebar, tab bar, work area and status bar.
+//!
+//! The workspace owns the UI state: which context and kind are selected,
+//! the table subscription, and the object the inspector follows. Rendering
+//! of the sidebar and the inspector lives in `sidebar.rs` and `inspector.rs`.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -6,57 +10,95 @@ use std::sync::Arc;
 
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::Size;
-use gpui_kit::component::table::{DataTable, TableState};
+use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 use gpui_kit::{
-    AnyElement, App, Context, Entity, FontWeight, Rgba, SharedString, Subscription, Task, Window,
-    div, prelude::*, px, relative, svg,
+    AnyElement, App, Context, Entity, EventEmitter, FontWeight, SharedString, Subscription, Task,
+    Window, div, prelude::*, px, relative,
 };
+use model::resource::{Action, Details, InspectTarget, Kind, ObjectKey, OwnerLink};
 use model::{
-    Catalog, Command, ConnectError, ConnectionState, Containers, ContextInfo, ContextName, Event,
-    LogOptions, LogRequest, LogTabId, LogTarget,
+    Catalog, Command, ConnectionState, Containers, ContextName, Event, LogOptions, LogRequest,
+    LogTabId, LogTarget, SubscriptionId,
 };
 use tokio::sync::mpsc;
 
 use crate::OpenLogs;
-use crate::assets::Icon;
+use crate::assets::{Icon, kind_icon};
+use crate::empty::{Empty, error_state};
 use crate::forwards::{self, ForwardsPane};
 use crate::log_pane::{LogPane, LogPaneEvent};
-use crate::pod_table::{self, PodTable};
+use crate::resource_table::{self, ResourceTable};
+use crate::sidebar::state_color;
 use crate::theme;
+use crate::widgets::{dot, icon};
 
-/// Room for the macOS window buttons at the top left of the sidebar.
-const TRAFFIC_LIGHTS_WIDTH: f32 = 80.0;
-
-/// Share of the work area's height the log pane takes under the pods.
+/// Share of the work area's height the log pane takes under the table.
 const LOG_PANE_SHARE: f32 = 0.42;
 
 /// Sends a command to the engine.
 pub type CommandSink = Rc<dyn Fn(Command)>;
 
-/// The root view of the main window.
-pub struct Workspace {
-    app_name: SharedString,
-    send: CommandSink,
-    /// `None` until the engine has read the kubeconfig files once.
-    catalog: Option<Catalog>,
-    selected: Option<ContextName>,
-    states: HashMap<ContextName, ConnectionState>,
-    table: Entity<TableState<PodTable>>,
-    /// Whether a snapshot for the selected context has arrived.
-    has_rows: bool,
-    /// The open log pane, under the pods.
-    logs: Option<OpenLogPane>,
-    last_log_tab: u64,
-    /// The port-forward manager, shown under the pod table when open.
-    forwards: Entity<ForwardsPane>,
-    show_forwards: bool,
-    _events: Task<()>,
+/// Events the workspace emits for the app to act on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceEvent {
+    /// An inspector action button was pressed.
+    Action {
+        /// Which action.
+        action: Action,
+        /// On which object.
+        target: InspectTarget,
+    },
 }
 
 struct OpenLogPane {
     pane: Entity<LogPane>,
     _closed: Subscription,
 }
+
+/// The current table subscription.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TableSub {
+    id: SubscriptionId,
+    context: ContextName,
+    kind: Kind,
+}
+
+/// The root view of the main window.
+pub struct Workspace {
+    pub(crate) app_name: SharedString,
+    send: CommandSink,
+    /// `None` until the engine has read the kubeconfig files once.
+    pub(crate) catalog: Option<Catalog>,
+    pub(crate) selected: Option<ContextName>,
+    pub(crate) states: HashMap<ContextName, ConnectionState>,
+    /// The kind the table shows.
+    pub(crate) kind: Kind,
+    sub: Option<TableSub>,
+    next_sub: u64,
+    table: Entity<TableState<ResourceTable>>,
+    /// Whether a snapshot for the current subscription has arrived.
+    has_rows: bool,
+    /// Row counts per context and kind, from the latest snapshots.
+    pub(crate) counts: HashMap<(ContextName, Kind), usize>,
+    /// Watch states per context and kind, from the latest snapshots.
+    pub(crate) statuses: HashMap<(ContextName, Kind), ConnectionState>,
+    /// What the inspector follows.
+    pub(crate) inspected: Option<InspectTarget>,
+    pub(crate) details: Option<Box<Details>>,
+    /// The inspected object was deleted.
+    pub(crate) details_gone: bool,
+    pub(crate) owners: Vec<OwnerLink>,
+    /// The open log pane, under the table.
+    logs: Option<OpenLogPane>,
+    last_log_tab: u64,
+    /// The port-forward manager, shown under the table when open.
+    forwards: Entity<ForwardsPane>,
+    pub(crate) show_forwards: bool,
+    _events: Task<()>,
+    _table_events: Subscription,
+}
+
+impl EventEmitter<WorkspaceEvent> for Workspace {}
 
 impl Workspace {
     /// Builds the workspace and starts listening to engine events.
@@ -68,7 +110,17 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Self {
         let table =
-            cx.new(|cx| TableState::new(PodTable::default(), window, cx).col_movable(false));
+            cx.new(|cx| TableState::new(ResourceTable::default(), window, cx).col_movable(false));
+        let table_events = cx.subscribe(&table, |this: &mut Self, table, event, cx| match event {
+            TableEvent::SelectRow(ix) => {
+                let key = table.read(cx).delegate().key_at(*ix);
+                if let Some(key) = key {
+                    this.inspect(key, cx);
+                }
+            }
+            TableEvent::ClearSelection => this.close_inspector(cx),
+            _ => {}
+        });
         let forwards = cx.new(|cx| ForwardsPane::new(Rc::clone(&send), window, cx));
         // tokio's receiver is executor-agnostic, so GPUI's foreground
         // executor can await it directly.
@@ -85,23 +137,32 @@ impl Workspace {
             catalog: None,
             selected: None,
             states: HashMap::new(),
+            kind: Kind::Pod,
+            sub: None,
+            next_sub: 1,
             table,
             has_rows: false,
+            counts: HashMap::new(),
+            statuses: HashMap::new(),
+            inspected: None,
+            details: None,
+            details_gone: false,
+            owners: Vec::new(),
             logs: None,
             last_log_tab: 0,
             forwards,
             show_forwards: false,
             _events: events_task,
+            _table_events: table_events,
         }
     }
 
-    /// Selects a context and asks the engine to connect to it.
+    /// Selects a context, connects to it and shows the current kind.
     pub fn select(&mut self, context: ContextName, cx: &mut Context<Self>) {
         if self.selected.as_ref() == Some(&context) {
             return;
         }
         self.selected = Some(context.clone());
-        self.has_rows = false;
         self.close_logs(cx);
         let namespace = self
             .catalog
@@ -111,8 +172,18 @@ impl Workspace {
         self.forwards.update(cx, |pane, cx| {
             pane.set_context(Some(context.clone()), namespace.as_deref(), cx);
         });
-        pod_table::set_rows(&self.table, Vec::new().into(), cx);
         (self.send)(Command::SelectContext(context));
+        self.resubscribe(cx);
+        cx.notify();
+    }
+
+    /// Shows another kind in the table.
+    pub fn select_kind(&mut self, kind: Kind, cx: &mut Context<Self>) {
+        if self.kind == kind {
+            return;
+        }
+        self.kind = kind;
+        self.resubscribe(cx);
         cx.notify();
     }
 
@@ -122,10 +193,58 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Follows an object of the current kind in the inspector.
+    pub fn inspect(&mut self, key: ObjectKey, cx: &mut Context<Self>) {
+        let Some(context) = self.selected.clone() else {
+            return;
+        };
+        let target = InspectTarget {
+            context,
+            kind: self.kind,
+            namespace: None,
+            key,
+        };
+        if self.inspected.as_ref() == Some(&target) {
+            return;
+        }
+        (self.send)(Command::Inspect(Some(target.clone())));
+        self.inspected = Some(target);
+        self.details = None;
+        self.details_gone = false;
+        self.owners.clear();
+        cx.notify();
+    }
+
+    /// Closes the inspector.
+    pub fn close_inspector(&mut self, cx: &mut Context<Self>) {
+        if self.inspected.take().is_none() {
+            return;
+        }
+        (self.send)(Command::Inspect(None));
+        self.details = None;
+        self.details_gone = false;
+        self.owners.clear();
+        self.table.update(cx, TableState::clear_selection);
+        cx.notify();
+    }
+
+    /// The pod selected in the table, when the table shows pods.
+    fn selected_pod(&self, cx: &App) -> Option<ObjectKey> {
+        if self.kind != Kind::Pod {
+            return None;
+        }
+        let state = self.table.read(cx);
+        state.delegate().key_at(state.selected_row()?)
+    }
+
     /// Opens a log pane for the pod selected in the table, replacing any
     /// open one.
     pub fn open_logs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((namespace, name)) = pod_table::selected_pod(&self.table, cx) else {
+        let Some(ObjectKey {
+            namespace: Some(namespace),
+            name,
+        }) = self.selected_pod(cx)
+        else {
             return;
         };
         self.open_pod_logs(namespace, name, window, cx);
@@ -189,6 +308,52 @@ impl Workspace {
         (open.pane.read(cx).tab() == tab).then(|| open.pane.clone())
     }
 
+    /// Runs an inspector action. Logs open here; other actions go to
+    /// whoever subscribes to [`WorkspaceEvent`].
+    pub(crate) fn run_action(
+        &mut self,
+        action: Action,
+        target: InspectTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if action == Action::Logs
+            && target.kind == Kind::Pod
+            && let Some(namespace) = target.key.namespace.clone()
+        {
+            self.open_pod_logs(namespace, Arc::clone(&target.key.name), window, cx);
+            return;
+        }
+        cx.emit(WorkspaceEvent::Action { action, target });
+    }
+
+    /// Replaces the table subscription with one for the selected context
+    /// and kind. The engine keeps the old watch warm for a while.
+    fn resubscribe(&mut self, cx: &mut Context<Self>) {
+        self.close_inspector(cx);
+        if let Some(old) = self.sub.take() {
+            (self.send)(Command::Unsubscribe(old.id));
+        }
+        self.has_rows = false;
+        resource_table::clear(&self.table, cx);
+        let Some(context) = self.selected.clone() else {
+            return;
+        };
+        let id = SubscriptionId(self.next_sub);
+        self.next_sub += 1;
+        (self.send)(Command::Subscribe {
+            id,
+            context: context.clone(),
+            resource: self.kind.resource(),
+            namespace: None,
+        });
+        self.sub = Some(TableSub {
+            id,
+            context,
+            kind: self.kind,
+        });
+    }
+
     fn apply(&mut self, event: Event, cx: &mut Context<Self>) {
         match event {
             // Log events only redraw the log pane.
@@ -204,21 +369,56 @@ impl Workspace {
                 }
                 return;
             }
+            Event::Forwards(rows) => {
+                self.forwards.update(cx, |pane, cx| pane.set_rows(rows, cx));
+                return;
+            }
             Event::Catalog(catalog) => self.catalog = Some(catalog),
             Event::Connection { context, state } => {
                 self.states.insert(context, state);
             }
-            Event::Pods(snapshot) => {
-                if self.selected.as_ref() != Some(&snapshot.context) {
+            // The sidebar of discovered kinds, and tables for kinds without
+            // a typed spec, come with issue #19.
+            Event::Kinds(_) => return,
+            Event::Table(snapshot) => {
+                let Some(kind) = Kind::from_resource(&snapshot.resource) else {
                     return;
+                };
+                let key = (snapshot.context.clone(), kind);
+                let has_data = matches!(
+                    snapshot.state,
+                    ConnectionState::Live | ConnectionState::Retrying(_)
+                );
+                if has_data {
+                    self.counts.insert(key.clone(), snapshot.rows.len());
                 }
-                self.has_rows = true;
-                pod_table::set_rows(&self.table, snapshot.rows, cx);
+                self.statuses.insert(key, snapshot.state.clone());
+                let current = snapshot.namespace.is_none()
+                    && self
+                        .sub
+                        .as_ref()
+                        .is_some_and(|s| s.context == snapshot.context && s.kind == kind);
+                if current && has_data {
+                    self.has_rows = true;
+                    resource_table::set_rows(
+                        &self.table,
+                        snapshot.columns,
+                        snapshot.rows,
+                        kind.namespaced(),
+                        cx,
+                    );
+                }
             }
-            // The kinds sidebar and generic tables arrive with the watch hub.
-            Event::Kinds(_) | Event::Table(_) => return,
-            Event::Forwards(rows) => {
-                self.forwards.update(cx, |pane, cx| pane.set_rows(rows, cx));
+            Event::Details { target, details } => {
+                if self.inspected.as_ref() == Some(&target) {
+                    self.details_gone = details.is_none();
+                    self.details = details;
+                }
+            }
+            Event::Owners { target, chain } => {
+                if self.inspected.as_ref() == Some(&target) {
+                    self.owners = chain;
+                }
             }
         }
         cx.notify();
@@ -228,13 +428,32 @@ impl Workspace {
         self.states.get(self.selected.as_ref()?)
     }
 
-    fn pod_count(&self, cx: &App) -> usize {
+    fn table_status(&self) -> Option<&ConnectionState> {
+        let sub = self.sub.as_ref()?;
+        self.statuses.get(&(sub.context.clone(), sub.kind))
+    }
+
+    fn row_count(&self, cx: &App) -> usize {
         self.table.read(cx).delegate().rows().len()
     }
+
+    /// The forwards pane, for the sidebar row.
+    pub(crate) fn forwards_pane(&self) -> &Entity<ForwardsPane> {
+        &self.forwards
+    }
+}
+
+/// A context name as a UI string, without copying it.
+pub(crate) fn shared(name: &ContextName) -> SharedString {
+    SharedString::from(Arc::clone(name.as_arc()))
 }
 
 impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let inspector = self
+            .inspected
+            .clone()
+            .map(|target| self.render_inspector(&target, cx).into_any_element());
         div()
             .size_full()
             .flex()
@@ -249,306 +468,97 @@ impl Render for Workspace {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .child(tab_bar())
+                    .child(self.render_tab_bar())
                     .child(
                         div()
                             .flex_1()
                             .min_h_0()
-                            .p(px(theme::PANE_GAP))
                             .flex()
-                            .flex_col()
                             .gap(px(theme::PANE_GAP))
+                            .p(px(theme::PANE_GAP))
                             .child(
                                 div()
                                     .flex_1()
-                                    .min_h_0()
-                                    .key_context("PodTable")
-                                    .on_action(cx.listener(|this, _: &OpenLogs, window, cx| {
-                                        this.open_logs(window, cx);
+                                    .min_w_0()
+                                    .h_full()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(theme::PANE_GAP))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_h_0()
+                                            .key_context("ResourceTable")
+                                            .on_action(cx.listener(
+                                                |this, _: &OpenLogs, window, cx| {
+                                                    this.open_logs(window, cx);
+                                                },
+                                            ))
+                                            .child(self.render_pane(cx)),
+                                    )
+                                    .children(self.logs.as_ref().map(|open| {
+                                        div()
+                                            .h(relative(LOG_PANE_SHARE))
+                                            .flex_none()
+                                            .child(open.pane.clone())
                                     }))
-                                    .child(self.render_pane(cx)),
+                                    .when(self.show_forwards, |el| {
+                                        el.child(
+                                            div()
+                                                .h(px(forwards::PANE_HEIGHT))
+                                                .flex_none()
+                                                .child(self.forwards.clone()),
+                                        )
+                                    }),
                             )
-                            .children(self.logs.as_ref().map(|open| {
-                                div()
-                                    .h(relative(LOG_PANE_SHARE))
-                                    .flex_none()
-                                    .child(open.pane.clone())
-                            }))
-                            .when(self.show_forwards, |el| {
-                                el.child(
-                                    div()
-                                        .h(px(forwards::PANE_HEIGHT))
-                                        .flex_none()
-                                        .child(self.forwards.clone()),
-                                )
-                            }),
+                            .children(inspector),
                     )
                     .child(self.render_status_bar(cx)),
             )
     }
 }
 
-// Sidebar.
 impl Workspace {
-    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_tab_bar(&self) -> impl IntoElement {
         div()
-            .w(px(theme::SIDEBAR_WIDTH))
-            .flex_none()
-            .h_full()
-            .flex()
-            .flex_col()
-            .bg(theme::CHROME)
-            .border_r_1()
-            .border_color(theme::BORDER)
-            .child(self.render_brand())
-            .child(section_label("Clusters"))
-            .child(self.render_clusters(cx))
-            .child(self.render_kinds(cx))
-            .child(self.render_forwards_row(cx))
-            .child(div().flex_1())
-            .child(self.render_sidebar_footer())
-    }
-
-    fn render_brand(&self) -> impl IntoElement {
-        // The traffic lights sit at the left of this row; the name follows them.
-        div()
-            .h(px(46.0))
+            .h(px(theme::TAB_BAR_HEIGHT))
             .flex_none()
             .flex()
             .items_center()
-            .pl(px(TRAFFIC_LIGHTS_WIDTH))
-            .pr(px(14.0))
+            .gap(px(3.0))
+            .px(px(10.0))
+            .bg(theme::CHROME)
+            .border_b_1()
+            .border_color(theme::BORDER)
             .child(
                 div()
+                    .h(px(29.0))
+                    .px(px(10.0))
                     .flex()
                     .items_center()
                     .gap(px(7.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(
-                        div()
-                            .size(px(18.0))
-                            .rounded(px(5.0))
-                            .bg(theme::TEXT)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(icon(Icon::Box, 11.0, theme::CHROME)),
-                    )
-                    .child(self.app_name.clone()),
+                    .rounded(px(7.0))
+                    .bg(theme::RAISED)
+                    .border_1()
+                    .border_color(theme::BORDER)
+                    .text_size(px(12.8))
+                    .text_color(theme::TEXT)
+                    .child(icon(kind_icon(self.kind), 13.0, theme::MUTED))
+                    .child(self.kind.plural()),
             )
     }
 
-    fn render_clusters(&self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(catalog) = &self.catalog else {
-            return sidebar_note("Reading kubeconfig").into_any_element();
-        };
-        if catalog.is_empty() {
-            return sidebar_note("No contexts found").into_any_element();
-        }
-        let mut rows = Vec::with_capacity(catalog.contexts.len());
-        for info in &catalog.contexts {
-            rows.push(
-                self.render_cluster_row(info, catalog, cx)
-                    .into_any_element(),
-            );
-        }
-        div()
-            .flex()
-            .flex_col()
-            .px(px(8.0))
-            .children(rows)
-            .into_any_element()
-    }
-
-    fn render_cluster_row(
-        &self,
-        info: &ContextInfo,
-        catalog: &Catalog,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let name = info.name.clone();
-        let selected = self.selected.as_ref() == Some(&info.name);
-        let is_current = catalog.current.as_ref() == Some(&info.name);
-        let right: AnyElement = match self.states.get(&info.name) {
-            Some(state) => dot(state_color(state), 7.0).into_any_element(),
-            None if is_current => div()
-                .text_size(px(theme::TEXT_LABEL))
-                .text_color(theme::DIM)
-                .child("current")
-                .into_any_element(),
-            None => div().into_any_element(),
-        };
-        div()
-            .id(SharedString::from(format!("cluster-{}", info.name)))
-            .debug_selector(|| format!("cluster-{}", info.name))
-            .h(px(theme::ROW_HEIGHT))
-            .flex()
-            .items_center()
-            .gap(px(9.0))
-            .px(px(8.0))
-            .rounded(px(theme::ROW_RADIUS))
-            .text_color(if selected {
-                theme::TEXT
-            } else {
-                theme::TERM_TEXT
-            })
-            .when(selected, |el| el.bg(theme::SELECTED))
-            .when(!selected, |el| el.hover(|s| s.bg(theme::HOVER)))
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| this.select(name.clone(), cx)))
-            .child(letter_tile(info.name.as_str()))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(shared(&info.name)),
-            )
-            .child(div().flex_none().child(right))
-    }
-
-    fn render_kinds(&self, cx: &App) -> impl IntoElement {
-        let title: SharedString = self
-            .selected
-            .as_ref()
-            .map_or_else(|| "Resources".into(), shared);
-        let connected = self.selected.is_some();
-        let pods = connected.then(|| self.pod_count(cx));
-        let kinds = [
-            (Icon::LayoutDashboard, "Overview"),
-            (Icon::Server, "Nodes"),
-            (Icon::Box, "Pods"),
-            (Icon::Layers, "Deployments"),
-            (Icon::Database, "StatefulSets"),
-            (Icon::Briefcase, "Jobs and CronJobs"),
-            (Icon::Network, "Services"),
-            (Icon::Globe, "Ingresses"),
-            (Icon::FileText, "ConfigMaps"),
-            (Icon::KeyRound, "Secrets"),
-            (Icon::Bell, "Events"),
-        ];
-        div()
-            .mt(px(10.0))
-            .flex()
-            .flex_col()
-            .child(section_label(title))
-            .child(
-                div()
-                    .px(px(8.0))
-                    .flex()
-                    .flex_col()
-                    .children(kinds.into_iter().map(|(kind_icon, label)| {
-                        let live = label == "Pods";
-                        let active = live && connected;
-                        let count = if live && self.has_rows {
-                            pods.map(|n| n.to_string())
-                        } else {
-                            None
-                        };
-                        div()
-                            .h(px(28.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(9.0))
-                            .px(px(8.0))
-                            .rounded(px(theme::ROW_RADIUS))
-                            .text_color(if active {
-                                theme::TEXT
-                            } else if live {
-                                theme::MUTED
-                            } else {
-                                theme::DIM
-                            })
-                            .when(active, |el| el.bg(theme::SELECTED))
-                            .child(icon(
-                                kind_icon,
-                                14.0,
-                                if active { theme::TEXT } else { theme::DIM },
-                            ))
-                            .child(div().flex_1().child(label))
-                            .children(count.map(|n| {
-                                div()
-                                    .font_family(theme::MONO_FONT)
-                                    .text_size(px(theme::TEXT_LABEL))
-                                    .text_color(theme::DIM)
-                                    .child(n)
-                            }))
-                    })),
-            )
-    }
-
-    fn render_forwards_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let pane = self.forwards.read(cx);
-        div().mt(px(10.0)).px(px(8.0)).child(forwards::sidebar_row(
-            pane.running(),
-            pane.total(),
-            self.show_forwards,
-            cx.listener(|this, _, _, cx| {
-                this.show_forwards = !this.show_forwards;
-                cx.notify();
-            }),
-        ))
-    }
-
-    fn render_sidebar_footer(&self) -> impl IntoElement {
-        let (text, color) = match &self.catalog {
-            None => (SharedString::from(""), theme::DIM),
-            Some(c) if !c.problems.is_empty() => (
-                format!(
-                    "{} kubeconfig file{} could not be read",
-                    c.problems.len(),
-                    plural(c.problems.len())
-                )
-                .into(),
-                theme::AMBER,
-            ),
-            Some(c) => {
-                let found = c.sources.len();
-                (
-                    format!(
-                        "{} contexts from {found} file{}",
-                        c.contexts.len(),
-                        plural(found)
-                    )
-                    .into(),
-                    theme::DIM,
-                )
-            }
-        };
-        div()
-            .h(px(40.0))
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .px(px(16.0))
-            .border_t_1()
-            .border_color(theme::BORDER)
-            .text_size(px(12.0))
-            .text_color(color)
-            .child(icon(Icon::FolderOpen, 13.0, theme::DIM))
-            .child(
-                div()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(text),
-            )
-    }
-}
-
-// Tabs, pane and status bar.
-impl Workspace {
     fn render_pane(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let count = self.pod_count(cx);
-        let pod_selected = pod_table::selected_pod(&self.table, cx).is_some();
-        let scope: SharedString = if self.selected.is_some() {
+        let count = self.row_count(cx);
+        let pod_selected = self.selected_pod(cx).is_some();
+        let scope: SharedString = if self.selected.is_none() {
+            "".into()
+        } else if self.kind.namespaced() {
             "all namespaces".into()
         } else {
-            "".into()
+            "cluster-wide".into()
         };
+        let retrying = matches!(self.table_status(), Some(ConnectionState::Retrying(_)));
         div()
             .size_full()
             .flex()
@@ -571,21 +581,24 @@ impl Workspace {
                     .border_color(theme::BORDER)
                     .text_size(px(12.0))
                     .text_color(theme::MUTED)
-                    .child(icon(Icon::Box, 13.0, theme::MUTED))
+                    .child(icon(kind_icon(self.kind), 13.0, theme::MUTED))
                     .child(
                         div()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme::TEXT)
-                            .child("Pods"),
+                            .child(self.kind.plural()),
                     )
                     .child(scope)
                     .child(div().flex_1())
+                    .when(retrying, |el| {
+                        el.child(div().text_color(theme::AMBER).child("reconnecting"))
+                    })
                     .when(self.has_rows, |el| {
                         el.child(
                             div()
                                 .font_family(theme::MONO_FONT)
                                 .text_color(theme::DIM)
-                                .child(format!("{count} pod{}", plural(count))),
+                                .child(count.to_string()),
                         )
                     })
                     .when(pod_selected, |el| {
@@ -637,7 +650,7 @@ impl Workspace {
                     .header_row_height(px(28.0))
                     .bordered(false)
                     .stripe(false)
-                    .accessibility_label("Pods"),
+                    .accessibility_label(self.kind.plural()),
             )
             .into_any_element()
     }
@@ -680,23 +693,36 @@ impl Workspace {
             .get(selected)
             .and_then(|c| c.server.clone())
             .unwrap_or_default();
-        match self.selected_state() {
-            None | Some(ConnectionState::Connecting) => Some(
-                Empty::new(Icon::LoaderCircle, format!("Connecting to {selected}"), "")
-                    .detail(server),
-            ),
-            Some(ConnectionState::Failed(err)) => Some(error_state(err, &server)),
-            Some(ConnectionState::Live | ConnectionState::Retrying(_)) if !self.has_rows => {
-                Some(Empty::new(Icon::LoaderCircle, "Loading pods", ""))
+        let what = self.kind.plural().to_lowercase();
+        if let Some(ConnectionState::Failed(err)) = self.selected_state() {
+            return Some(error_state(err, &server, &what));
+        }
+        if self.has_rows {
+            return (count == 0).then(|| {
+                Empty::new(
+                    kind_icon(self.kind),
+                    format!("No {what}"),
+                    format!("There are no {what} you can see here."),
+                )
+            });
+        }
+        match self.table_status() {
+            Some(ConnectionState::Failed(err)) => Some(error_state(err, &server, &what)),
+            _ if matches!(
+                self.selected_state(),
+                None | Some(ConnectionState::Connecting)
+            ) =>
+            {
+                Some(
+                    Empty::new(Icon::LoaderCircle, format!("Connecting to {selected}"), "")
+                        .detail(server),
+                )
             }
-            Some(ConnectionState::Live | ConnectionState::Retrying(_)) if count == 0 => {
-                Some(Empty::new(
-                    Icon::Box,
-                    "No pods",
-                    "This cluster has no pods you can see.",
-                ))
-            }
-            Some(_) => None,
+            _ => Some(Empty::new(
+                Icon::LoaderCircle,
+                format!("Loading {what}"),
+                "",
+            )),
         }
     }
 
@@ -716,17 +742,18 @@ impl Workspace {
                     .items_center()
                     .gap(px(7.0))
                     .text_color(theme::TERM_TEXT)
-                    .child(dot(color, 6.0))
+                    .child(dot(state.map_or(theme::AMBER, state_color), 6.0))
                     .child(shared(selected))
                     .into_any_element(),
             );
             if self.has_rows {
-                let count = self.pod_count(cx);
-                items.push(
-                    div()
-                        .child(format!("{count} pod{}", plural(count)))
-                        .into_any_element(),
-                );
+                let count = self.row_count(cx);
+                let noun = if count == 1 {
+                    self.kind.singular().to_lowercase()
+                } else {
+                    self.kind.plural().to_lowercase()
+                };
+                items.push(div().child(format!("{count} {noun}")).into_any_element());
             }
             items.push(div().text_color(color).child(label).into_any_element());
         } else {
@@ -745,267 +772,5 @@ impl Workspace {
             .text_size(px(12.0))
             .text_color(theme::MUTED)
             .children(items)
-    }
-}
-
-/// An empty or error state in the middle of a pane.
-struct Empty {
-    icon: Icon,
-    color: Rgba,
-    title: SharedString,
-    body: SharedString,
-    detail: Option<SharedString>,
-}
-
-impl Empty {
-    fn new(icon: Icon, title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
-        Self {
-            icon,
-            color: theme::DIM,
-            title: title.into(),
-            body: body.into(),
-            detail: None,
-        }
-    }
-
-    fn error(mut self) -> Self {
-        self.color = theme::RED;
-        self
-    }
-
-    fn detail(mut self, detail: impl Into<SharedString>) -> Self {
-        let detail = detail.into();
-        if !detail.is_empty() {
-            self.detail = Some(detail);
-        }
-        self
-    }
-
-    fn render(self) -> AnyElement {
-        div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(24.0))
-            .child(
-                div()
-                    .max_w(px(520.0))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(icon(self.icon, 22.0, self.color))
-                    .child(
-                        div()
-                            .mt(px(4.0))
-                            .text_size(px(14.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::TEXT)
-                            .child(self.title),
-                    )
-                    .when(!self.body.is_empty(), |el| {
-                        el.child(
-                            div()
-                                .text_center()
-                                .text_color(theme::MUTED)
-                                .child(self.body),
-                        )
-                    })
-                    .children(self.detail.map(|d| {
-                        div()
-                            .mt(px(4.0))
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .rounded(px(6.0))
-                            .bg(theme::HOVER)
-                            .font_family(theme::MONO_FONT)
-                            .text_size(px(11.5))
-                            .text_color(theme::MUTED)
-                            .child(d)
-                    })),
-            )
-            .into_any_element()
-    }
-}
-
-fn error_state(err: &ConnectError, server: &str) -> Empty {
-    match err {
-        ConnectError::AuthPluginMissing { command, path } => Empty::new(
-            Icon::TriangleAlert,
-            "Auth plugin not found",
-            format!(
-                "This context logs in with `{command}`, which is not on the PATH the app sees. \
-                 Install it, or make sure your login shell adds it to PATH."
-            ),
-        )
-        .error()
-        .detail(format!("PATH searched: {path}")),
-        ConnectError::Unreachable(msg) => Empty::new(
-            Icon::Unplug,
-            "Cluster unreachable",
-            "The API server did not answer. Check the network, VPN or that the cluster is running.",
-        )
-        .error()
-        .detail(format!("{server}\n{msg}")),
-        ConnectError::Auth(msg) => Empty::new(
-            Icon::KeyRound,
-            "Authentication failed",
-            "The cluster rejected the credentials.",
-        )
-        .error()
-        .detail(msg.clone()),
-        ConnectError::Forbidden(msg) => Empty::new(
-            Icon::KeyRound,
-            "Not allowed to list pods",
-            "Your user cannot list pods across all namespaces.",
-        )
-        .error()
-        .detail(msg.clone()),
-        ConnectError::Config(msg) => Empty::new(
-            Icon::CircleAlert,
-            "Kubeconfig problem",
-            "This context could not be loaded from your kubeconfig.",
-        )
-        .error()
-        .detail(msg.clone()),
-        ConnectError::UnknownContext => Empty::new(
-            Icon::CircleAlert,
-            "Context not found",
-            "This context is no longer in your kubeconfig. Reload with Cmd-R.",
-        )
-        .error(),
-        ConnectError::Other(msg) => Empty::new(Icon::CircleAlert, "Could not connect", "")
-            .error()
-            .detail(msg.clone()),
-    }
-}
-
-fn tab_bar() -> impl IntoElement {
-    div()
-        .h(px(theme::TAB_BAR_HEIGHT))
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap(px(3.0))
-        .px(px(10.0))
-        .bg(theme::CHROME)
-        .border_b_1()
-        .border_color(theme::BORDER)
-        .child(
-            div()
-                .h(px(29.0))
-                .px(px(10.0))
-                .flex()
-                .items_center()
-                .gap(px(7.0))
-                .rounded(px(7.0))
-                .bg(theme::RAISED)
-                .border_1()
-                .border_color(theme::BORDER)
-                .text_size(px(12.8))
-                .text_color(theme::TEXT)
-                .child(icon(Icon::Box, 13.0, theme::MUTED))
-                .child("Pods"),
-        )
-}
-
-fn state_color(state: &ConnectionState) -> Rgba {
-    match state {
-        ConnectionState::Connecting | ConnectionState::Retrying(_) => theme::AMBER,
-        ConnectionState::Live => theme::GREEN,
-        ConnectionState::Failed(_) => theme::RED,
-    }
-}
-
-fn section_label(text: impl Into<SharedString>) -> impl IntoElement {
-    div()
-        .h(px(30.0))
-        .flex_none()
-        .flex()
-        .items_center()
-        .px(px(16.0))
-        .text_size(px(theme::TEXT_LABEL))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(theme::DIM)
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_ellipsis()
-        .child(text.into())
-}
-
-fn sidebar_note(text: &'static str) -> impl IntoElement {
-    div()
-        .h(px(theme::ROW_HEIGHT))
-        .flex()
-        .items_center()
-        .px(px(16.0))
-        .text_color(theme::DIM)
-        .child(text)
-}
-
-fn letter_tile(name: &str) -> impl IntoElement {
-    let letter = name
-        .chars()
-        .find(char::is_ascii_alphanumeric)
-        .map_or('?', |c| c.to_ascii_uppercase());
-    div()
-        .size(px(18.0))
-        .flex_none()
-        .rounded(px(5.0))
-        .bg(tile_color(name))
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_size(px(10.5))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(gpui_kit::white())
-        .child(SharedString::from(letter.to_string()))
-}
-
-/// A stable colour per cluster name.
-fn tile_color(name: &str) -> Rgba {
-    // FNV-1a: tiny, stable across runs and platforms.
-    let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| {
-        (h ^ u32::from(b)).wrapping_mul(0x0100_0193)
-    });
-    let ix = usize::try_from(hash).unwrap_or(0) % theme::TILE_COLORS.len();
-    theme::TILE_COLORS[ix]
-}
-
-fn shared(name: &ContextName) -> SharedString {
-    SharedString::from(Arc::clone(name.as_arc()))
-}
-
-fn dot(color: Rgba, size: f32) -> impl IntoElement {
-    div().flex_none().size(px(size)).rounded_full().bg(color)
-}
-
-fn icon(icon: Icon, size: f32, color: Rgba) -> impl IntoElement {
-    svg()
-        .path(icon.path())
-        .flex_none()
-        .size(px(size))
-        .text_color(color)
-}
-
-fn plural(n: usize) -> &'static str {
-    if n == 1 { "" } else { "s" }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tile_colour_is_stable() {
-        assert_eq!(tile_color("kind-platform"), tile_color("kind-platform"));
-    }
-
-    #[test]
-    fn plural_suffix() {
-        assert_eq!(plural(1), "");
-        assert_eq!(plural(0), "s");
-        assert_eq!(plural(2), "s");
     }
 }
