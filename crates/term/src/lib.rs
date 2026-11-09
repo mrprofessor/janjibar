@@ -100,13 +100,13 @@ mod element;
 mod engine;
 pub mod frame;
 mod geometry;
+mod host_theme;
 mod ime;
 pub mod input;
 mod keys;
 mod links;
 mod options;
 pub mod park;
-mod host_theme;
 mod process;
 mod pty;
 mod pty_io;
@@ -123,7 +123,7 @@ pub use engine::{
     ByteHandle, ByteSink, ByteSource, Engine, ExitStatus, ForegroundProcess, InputRejected,
     TerminalSnapshot, TerminalStatus,
 };
-pub use frame::{RowId, TerminalColors, TerminalFrame, Viewport};
+pub use frame::{Rgb, RowId, TerminalColors, TerminalFrame, Viewport};
 pub use geometry::Geometry;
 pub use input::TerminalInput;
 pub use options::{EngineOptions, LocalTerminalOptions, ShellIntegration, WorkingDirectory};

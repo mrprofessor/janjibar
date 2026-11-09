@@ -17,6 +17,20 @@ use ghostty_vt::style::Palette;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Rgb(pub u8, pub u8, pub u8);
 
+impl From<gpui_kit::Rgba> for Rgb {
+    /// The color's channels rounded to 8 bits. Alpha is dropped: the grid
+    /// is opaque.
+    fn from(color: gpui_kit::Rgba) -> Self {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the value is clamped to 0..=255 first"
+        )]
+        let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+        Self(channel(color.r), channel(color.g), channel(color.b))
+    }
+}
+
 /// A cell color as the program set it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Color {
@@ -223,6 +237,15 @@ impl TerminalColors {
     #[must_use]
     pub fn with_palette_entry(mut self, index: u8, color: Rgb) -> Self {
         self.palette[usize::from(index)] = color;
+        self
+    }
+
+    /// Set the 16 ANSI colors: black, red, green, yellow, blue, magenta,
+    /// cyan and white, then their bright forms. The rest of the 256-color
+    /// palette keeps Ghostty's cube and grey ramp.
+    #[must_use]
+    pub fn with_ansi(mut self, ansi: [Rgb; 16]) -> Self {
+        self.palette[..16].copy_from_slice(&ansi);
         self
     }
 
@@ -765,6 +788,28 @@ impl InputModes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_gpui_color_rounds_to_eight_bits_and_drops_alpha() {
+        let color = gpui_kit::Rgba {
+            r: 0x17 as f32 / 255.0,
+            g: 1.5,
+            b: -0.2,
+            a: 0.1,
+        };
+        assert_eq!(Rgb::from(color), Rgb(0x17, 0xff, 0x00));
+    }
+
+    #[test]
+    fn ansi_colors_replace_only_the_first_sixteen_entries() {
+        let ansi = [Rgb(1, 2, 3); 16];
+        let colors = TerminalColors::default().with_ansi(ansi);
+        assert_eq!(colors.palette()[..16], ansi);
+        assert_eq!(
+            colors.palette()[16..],
+            TerminalColors::default().palette()[16..]
+        );
+    }
 
     #[test]
     fn the_default_colors_are_ghosttys_built_in_ones() {

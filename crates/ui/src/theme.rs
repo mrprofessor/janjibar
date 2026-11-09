@@ -73,6 +73,39 @@ pub const TILE_COLORS: [Rgba; 6] = [
     hex(0x005f_9e6e),
 ];
 
+/// Terminal background: terminals sit on the pane card.
+pub const TERMINAL_BACKGROUND: Rgba = PANE;
+/// Terminal text.
+pub const TERMINAL_FOREGROUND: Rgba = TERM_TEXT;
+/// Terminal cursor.
+pub const TERMINAL_CURSOR: Rgba = ACCENT;
+/// Terminal selection: the accent at a quarter over the pane, opaque.
+pub const TERMINAL_SELECTION: Rgba = hex(0x0037_3f4c);
+/// Terminal text inside a selection.
+pub const TERMINAL_SELECTION_TEXT: Rgba = TEXT;
+/// The terminal's 16 ANSI colours: black, red, green, yellow, blue,
+/// magenta, cyan and white, then their bright forms. Red, green, yellow
+/// and blue are the state colours, so a failing pod and a red line in a
+/// shell look the same.
+pub const TERMINAL_ANSI: [Rgba; 16] = [
+    RAISED,
+    RED,
+    GREEN,
+    AMBER,
+    BLUE,
+    hex(0x00c4_9ad8),
+    hex(0x007c_c3c3),
+    TERM_TEXT,
+    DIM,
+    hex(0x00ff_8a7a),
+    hex(0x00bb_d1a6),
+    hex(0x00f0_d295),
+    hex(0x009c_c0ff),
+    hex(0x00d6_b2e6),
+    hex(0x009a_d6d6),
+    TEXT,
+];
+
 /// Interface font.
 pub const UI_FONT: &str = "Geist";
 /// Font for names, numbers, logs and terminals.
