@@ -1474,6 +1474,8 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "model",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -7256,6 +7258,8 @@ version = "0.1.0"
 dependencies = [
  "gpui-kit",
  "model",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
