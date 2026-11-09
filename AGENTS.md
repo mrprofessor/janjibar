@@ -39,6 +39,7 @@ nix develop                                   # interactive shell
 nix develop -c cargo build                    # build everything
 nix develop -c cargo run -p app               # run the app (binary: janjibar)
 nix develop -c cargo run -p app -- --context NAME   # connect to NAME at start
+nix develop -c cargo run -p app -- --context NAME --logs NS/POD   # and open its logs
 nix develop -c cargo run -p app --release     # release build, for measuring
 nix develop -c cargo test --workspace         # all tests (no cluster needed)
 nix develop -c cargo clippy --workspace --all-targets -- -D warnings

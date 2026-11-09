@@ -20,22 +20,32 @@ use tracing_subscriber::EnvFilter;
 struct Args {
     /// Connect to this context at startup.
     context: Option<String>,
+    /// Open logs for this pod (`namespace/name`) at startup.
+    logs: Option<(String, String)>,
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut args = Args { context: None };
+    let mut args = Args {
+        context: None,
+        logs: None,
+    };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--context" => {
                 args.context = Some(it.next().ok_or("--context needs a context name")?);
             }
+            "--logs" => {
+                let pod = it.next().ok_or("--logs needs NAMESPACE/POD")?;
+                let (ns, name) = pod.split_once('/').ok_or("--logs needs NAMESPACE/POD")?;
+                args.logs = Some((ns.to_owned(), name.to_owned()));
+            }
             other => {
                 if let Some(name) = other.strip_prefix("--context=") {
                     args.context = Some(name.to_owned());
                 } else {
                     return Err(format!(
-                        "unknown argument `{other}`. Usage: [--context NAME]"
+                        "unknown argument `{other}`. Usage: [--context NAME [--logs NAMESPACE/POD]]"
                     ));
                 }
             }
@@ -110,7 +120,7 @@ fn main() -> anyhow::Result<()> {
                 cx.new(|cx| ui::Workspace::new(brand::APP_NAME, send, events, window, cx))
             });
             match opened {
-                Ok((_, workspace)) => {
+                Ok((window, workspace)) => {
                     let weak = workspace.downgrade();
                     cx.on_action(move |_: &ui::ReloadKubeconfig, cx| {
                         // A failed update means the window is gone.
@@ -118,6 +128,14 @@ fn main() -> anyhow::Result<()> {
                     });
                     if let Some(name) = args.context {
                         workspace.update(cx, |w, cx| w.select(ContextName::new(name), cx));
+                        if let Some((ns, pod)) = args.logs {
+                            let opened = window.update(cx, |_, window, cx| {
+                                workspace.update(cx, |w, cx| w.open_pod_logs(ns, pod, window, cx));
+                            });
+                            if let Err(err) = opened {
+                                tracing::warn!("could not open logs at startup: {err:#}");
+                            }
+                        }
                     }
                 }
                 Err(err) => {

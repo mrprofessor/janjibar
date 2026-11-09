@@ -2,7 +2,10 @@
 
 use std::fmt;
 
-use crate::{Catalog, ContextName, KindCatalog, PodSnapshot, TableSnapshot};
+use crate::{
+    Catalog, ContextName, KindCatalog, LogChunk, LogRequest, LogState, LogTabId, PodSnapshot,
+    TableSnapshot,
+};
 
 /// What the UI asks the engine to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,6 +14,10 @@ pub enum Command {
     ReloadCatalog,
     /// Connect to a context and watch its pods. Stops the previous watch.
     SelectContext(ContextName),
+    /// Open a log tab and start streaming into it.
+    OpenLogs(LogRequest),
+    /// Close a log tab and stop its streams.
+    CloseLogs(LogTabId),
 }
 
 /// What the engine tells the UI.
@@ -31,6 +38,15 @@ pub enum Event {
     Kinds(KindCatalog),
     /// New rows or a new state for a watched kind.
     Table(TableSnapshot),
+    /// New lines for a log tab, at most one chunk per tab every 33 ms.
+    Logs(LogChunk),
+    /// A log tab's state changed.
+    LogState {
+        /// The tab.
+        tab: LogTabId,
+        /// Its new state.
+        state: LogState,
+    },
 }
 
 /// Where a context's connection stands.
