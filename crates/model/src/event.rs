@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use crate::{Catalog, ContextName, PodSnapshot};
+use crate::{Catalog, ContextName, KindCatalog, PodSnapshot, TableSnapshot};
 
 /// What the UI asks the engine to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +27,10 @@ pub enum Event {
     },
     /// New pod rows for the selected context.
     Pods(PodSnapshot),
+    /// The kinds a context serves, sent after it connects.
+    Kinds(KindCatalog),
+    /// New rows or a new state for a watched kind.
+    Table(TableSnapshot),
 }
 
 /// Where a context's connection stands.

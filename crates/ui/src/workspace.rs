@@ -101,6 +101,8 @@ impl Workspace {
                 self.has_rows = true;
                 pod_table::set_rows(&self.table, snapshot.rows, cx);
             }
+            // The kinds sidebar and generic tables arrive with the watch hub.
+            Event::Kinds(_) | Event::Table(_) => return,
         }
         cx.notify();
     }
