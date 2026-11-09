@@ -21,6 +21,7 @@ crates/
   engine/   tokio side: kubeconfig catalog, clients, watches, row projection
   model/    plain data that crosses the bridge (rows, catalog, events)
   helm/     reads Helm releases from Secrets and ConfigMaps (no GPUI)
+  prometheus/  finds Prometheus, builds PromQL, runs queries (no GPUI)
   bridge/   vendored gpui_tokio; tokio <-> GPUI glue
   ui/       GPUI views: shell, sidebar, tabs, tables, theme, fonts
 .agents/skills/   skills for agents (.claude/skills links here)
@@ -41,6 +42,7 @@ nix develop -c cargo run -p app               # run the app (binary: janjibar)
 nix develop -c cargo run -p app -- --context NAME   # connect to NAME at start
 nix develop -c cargo run -p app -- --context NAME --logs NS/POD   # and open its logs
 nix develop -c cargo run -p app --release     # release build, for measuring
+nix develop -c script/bundle-mac              # stripped, signed .app (LTO, slow)
 nix develop -c cargo test --workspace         # all tests (no cluster needed)
 nix develop -c cargo clippy --workspace --all-targets -- -D warnings
 nix develop -c cargo fmt --all                # format (CI runs --check)

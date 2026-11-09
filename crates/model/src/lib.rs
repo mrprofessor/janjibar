@@ -10,6 +10,7 @@ mod helm;
 mod helm_feed;
 mod kinds;
 mod log;
+mod metrics;
 mod pod;
 mod table;
 
@@ -25,6 +26,11 @@ pub use kinds::{
 pub use log::{
     Clock, Containers, DEFAULT_LOG_CAPACITY, DEFAULT_TAIL_LINES, LineKind, LogBuffer, LogChange,
     LogChunk, LogLevel, LogLine, LogOptions, LogRequest, LogSource, LogState, LogTabId, LogTarget,
+};
+pub use metrics::{
+    ClusterMetric, IngressMetric, MetricQuery, MetricSeries, NodeMetric, PodMetric, PodSelection,
+    PodSet, PrometheusProvider, PrometheusSettings, PrometheusSource, PrometheusUrl, PvcMetric,
+    QueryMethod, Sample, ServiceRef, TimeRange, WorkloadKind,
 };
 pub use pod::{Health, PodRow, PodSnapshot, Ready};
 pub use table::{Column, ColumnType, TableRow, TableSnapshot};
