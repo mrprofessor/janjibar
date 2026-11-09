@@ -11,3 +11,6 @@ pub const BUNDLE_ID: &str = "io.github.mrprofessor.janjibar";
 
 /// Field manager name for server-side apply.
 pub const FIELD_MANAGER: &str = "janjibar";
+
+/// Folder name for the app's own files, under `~/.config`.
+pub const CONFIG_DIR: &str = "janjibar";

@@ -69,7 +69,11 @@ fn main() -> anyhow::Result<()> {
         .thread_name("engine")
         .enable_all()
         .build()?;
-    let (engine, events) = engine::start(runtime.handle(), engine::KubeconfigSources::from_env());
+    let (engine, events) = engine::start_with(
+        runtime.handle(),
+        engine::KubeconfigSources::from_env(),
+        engine::EngineOptions::from_env(),
+    );
     let handle = runtime.handle().clone();
 
     gpui_kit::application()
