@@ -1,0 +1,22 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "creationTimestamp": "2026-11-09T00:02:17Z",
+    "labels": {
+      "createdAt": "1794182537",
+      "modifiedAt": "1794182837",
+      "name": "edge",
+      "owner": "helm",
+      "status": "failed",
+      "version": "2"
+    },
+    "name": "sh.helm.release.v1.edge.v2",
+    "namespace": "ingress",
+    "resourceVersion": "90211",
+    "uid": "b7d1a3f2-5c0e-4f6b-8d2a-9e4c7f1a6d33"
+  },
+  "data": {
+    "release": "H4sIAAAAAAAC/3VS72/aMBD9Vyzv4wg4bimrv41u69B+VFspUJaqMskleDiOFRtGhPjfdw4DKk2V/ME+v7t7797tqJElUEEhK4B2qDJ5RcWO5qp2/jkDq6sGMvznjF9FcRyx63HMxSUTjHf78dv4QjCGeVq+DkcIF/GgOxhcnhMycGmtrFeVQfiDLWqZAUlaHgkluVQaMkHSynjYepKBzLQyQGCbAmTYo0Odl37tMPsApvsOTZey9oF/CV5m0stwf6EwsnW1bTB3A7U7tOZd1v2f0HtDAp4c8dKqySllwzHiGxuqSmu1SmWbhgR0la6oMGutEQGl1dIDUvx1YnEK9g7TKsH4biNLHSi0hOnjbGgn5aRJud4sflcFvv+kzTX/9sPWctpf3anhx/ls6BYX2s+nfXZTxjq7/bR6nP1c3hVVMbrtLxfTh6vRZz8Y3fTv59Otfpx9119XbbzIZ+wLdiurzKuW08msd+N4IHiM9nbjmP/zav+E45J6HXTsaA2tXrxzlOvSJZTyKPjwOtdljGHRcMYMFyacOTbO0a0wkycsUEqjcnDoGY2iKDFvyH21rlMQ5GxX79WZJebsiyBohett4sSslMHV+XDCJua4DiIxhAQnDvUT4yykbfCoSxCemJcLwjutdc7KNGhSpqjBuXYlrG6esfKyChvvnKT7vwg5wyVPAwAA"
+  }
+}

@@ -15,6 +15,7 @@ model = { path = "crates/model" }
 engine = { path = "crates/engine" }
 bridge = { path = "crates/bridge" }
 ui = { path = "crates/ui" }
+helm = { path = "crates/helm" }
 
 # GPUI. Pin exactly: gpui-kit re-exports gpui-pre =0.3.11 and enables
 # runtime_shaders and font-kit on the platform crate for us.
@@ -32,6 +33,13 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+
+# Helm release payloads: base64 of gzip of JSON. Same base64 major as kube.
+base64 = "0.23"
+flate2 = "1"
+# YAML. kube 5 uses it too. serde_yml and serde_yaml are banned in deny.toml.
+serde-saphyr = "2.1"
 
 # Tests.
 tempfile = "3"
