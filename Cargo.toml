@@ -22,7 +22,7 @@ helm = { path = "crates/helm" }
 gpui-kit = "=0.9.0"
 
 # Kubernetes.
-kube = { version = "5.0.0", features = ["runtime"] }
+kube = { version = "5.0.0", features = ["runtime", "ws"] }
 k8s-openapi = { version = "0.29.0", features = ["latest"] }
 
 # Async and plumbing.
