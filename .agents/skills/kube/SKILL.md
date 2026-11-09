@@ -91,6 +91,15 @@ let stream = watcher(api, watcher::Config::default().page_size(500))
 - Secrets and ConfigMaps: use `metadata_watcher` so values never sit in
   memory. It yields `PartialObjectMeta<K>`.
 
+### Testing watches without a cluster
+
+`crates/engine/tests/support/fake_api.rs` is a small HTTP server that serves
+`GET /api/v1/pods` (a `PodList`) and the same path with `watch=true`
+(chunked watch events, replayed from the requested resourceVersion). Point a
+client at it with `kube::Config::new(api.url().parse()?)`. The first
+snapshot is sent after the initial list, before the watch request opens, so
+wait for `open_watches()` instead of asserting it right away.
+
 ### Snapshots for the UI
 
 Project rows on tokio, never in the view. Coalesce: wake on change, then

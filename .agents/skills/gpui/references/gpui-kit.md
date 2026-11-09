@@ -22,9 +22,11 @@ and notifications. Call it inside `cx.update` from async code.
 The kit keeps a `Theme` global (`gpui_kit::component::Theme`). It derefs to
 `ThemeColor` (fields like `background`, `border`, `table_head`, `table_hover`,
 `table_active`, `scrollbar_thumb`...) and also holds `tokens`, a second copy
-some components read (`cx.theme().tokens.table_hover`). After changing colours,
-rebuild the tokens so both agree. `crates/ui/src/theme.rs` does this once at
-startup from our graphite tokens. Read colours in views with
+some components read (`cx.theme().tokens.table_hover`). Change colours only
+through `Theme::update(cx, |theme| ...)`, which reconciles `tokens` with the
+colours and refreshes windows. Switch mode with `Theme::change` before that,
+never inside it. `crates/ui/src/theme.rs` does this once at startup from our
+graphite tokens. Read colours in views with
 `cx.theme()` (trait `ActiveTheme`) only for kit components; our own views use
 `ui::theme` tokens directly.
 
@@ -43,9 +45,9 @@ impl TableDelegate for PodTable {
                  _: &mut Context<TableState<Self>>) -> impl IntoElement { /* cell */ }
 }
 
-let state = cx.new(|cx| TableState::new(PodTable::new(), window, cx));
-// in render:
-DataTable::new(&state).with_size(Size::Small)  // 30 px rows
+let state = cx.new(|cx| TableState::new(PodTable::default(), window, cx));
+// in render (Sizable trait in scope):
+DataTable::new(&state).with_size(Size::Small).header_row_height(px(28.)) // 30 px rows
 ```
 
 - `Column::new(key, name).width(px(..))`, `.text_right()`, `.sortable()`,
@@ -55,8 +57,10 @@ DataTable::new(&state).with_size(Size::Small)  // 30 px rows
   empty state, `cell_label` for screen readers.
 - `perform_sort` is called with the column and direction; sorting belongs in
   the engine eventually, the delegate just records the choice.
-- After swapping rows: `state.update(cx, |t, cx| { t.delegate_mut().rows = rows; t.refresh(cx); })`.
-  `refresh` re-reads columns; for row-only changes `cx.notify()` is enough.
+- After swapping rows: `state.update(cx, |t, cx| { t.delegate_mut().rows = rows; cx.notify(); })`.
+  `refresh` is only for column changes. `ui::pod_table::set_rows` also keeps
+  the selected pod selected by namespace and name. Note `set_selected_row`
+  scrolls to the row, so call it only when the index really changed.
 - Events: subscribe to `TableEvent` (`SelectRow`, `DoubleClickedRow`,
   `ColumnWidthsChanged`...).
 

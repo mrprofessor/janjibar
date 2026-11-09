@@ -178,24 +178,49 @@ Rules:
   **No shadows on panes.**
 - Sidebar about 252 px on `chrome`. Tab bar 42 px. Status bar 28 px.
 - Colour only for state: a dot or a tinted chip. Everything else is greys.
-- The kit's `Theme` global is overridden from the tokens at startup so kit
-  components (table, scrollbars, buttons) match.
+- The kit's `Theme` global is overridden from the tokens at startup
+  (`ui::theme::apply_to_kit`) so kit components (table, scrollbars) match.
+  Call `Theme::change(ThemeMode::Dark, None, cx)` first, then
+  `Theme::update(cx, |t| ...)`. A mode change inside `update` reloads the
+  kit's default colours over yours, and `update` keeps the kit's second copy
+  of the colours (`theme.tokens`) in step.
+- Icons: our Lucide SVGs live in `crates/ui/assets/icons` and are served by
+  `ui::assets::Assets`, which falls back to the kit's bundle. Register it
+  with `gpui_kit::application().with_assets(ui::assets::Assets)` or no icon
+  draws. Draw one with `svg().path(Icon::Box.path()).size(px(14.)).text_color(c)`.
 
 ## Testing
 
-- Add `gpui-kit = { workspace = true, features = ["test-support"] }` under
-  `[dev-dependencies]` of the crate under test.
-- Use `#[gpui_kit::test]` with `cx: &mut TestAppContext`. Import kit types
-  explicitly in test modules so GPUI's `test` macro does not shadow `#[test]`.
-- `cx.add_window_view(|window, cx| View::new(window, cx))` returns the view and
-  a `VisualTestContext`. `cx.simulate_keystrokes("j j")` drives key bindings.
-  `cx.run_until_parked()` drains pending tasks;
-  `cx.executor().advance_clock(d)` moves fake time.
-- Keep logic out of views so most tests are plain `#[test]`s on `model` and
-  `engine` code. GPUI tests are for focus, keys and view state.
+- Keep logic out of views so most tests are plain `#[test]`s on `model`,
+  `engine` and pure `ui` helpers (see `pod_table.rs`, `theme.rs`).
+- **GPUI view tests are blocked for now.** Enabling `gpui-kit`'s
+  `test-support` feature makes Cargo try to resolve `gpui-fast`, which pins
+  `taffy =0.15.0` and conflicts with the lockfile. Revisit on the next
+  gpui-kit bump. When it works, the shape is:
+  - `gpui-kit = { workspace = true, features = ["test-support"] }` under
+    `[dev-dependencies]`.
+  - `#[gpui_kit::test]` with `cx: &mut TestAppContext`; import kit types
+    explicitly so GPUI's `test` macro does not shadow `#[test]`.
+  - `cx.add_window_view(|window, cx| View::new(window, cx))` returns the view
+    and a `VisualTestContext`; `cx.simulate_keystrokes("j j")` drives key
+    bindings; `cx.run_until_parked()` drains tasks;
+    `cx.executor().advance_clock(d)` moves fake time.
+- To see a change, run the app against the fake cluster (see `AGENTS.md`).
+  Capture only the app window: list its window ids by PID with
+  `CGWindowListCopyWindowInfo`, then `screencapture -x -o -l <id> out.png`.
+  Never capture the whole screen; delete the image after looking.
 
-## Gotchas from the spike
+## Gotchas
 
+- A method that takes `cx: &mut Context<Self>` and returns `impl IntoElement`
+  captures `cx`. Calling it inside `.map(|x| self.row(x, cx))` fails with
+  "captured variable cannot escape `FnMut` closure body". Use a `for` loop that
+  pushes `.into_any_element()` into a `Vec`, then `.children(vec)`.
+- A tiling window manager may make the window full screen. GPU surfaces scale
+  with window pixels and dominate the memory footprint; note the window size
+  with any memory number.
+- Release builds keep symbols (`strip = false`): stripped proc-macro dylibs
+  fail to load on this toolchain ("mis-aligned LINKEDIT string pool").
 - No Metal toolchain on the dev Mac: `runtime_shaders` is required (the kit
   enables it).
 - No glyphs means `font-kit` is off somewhere.

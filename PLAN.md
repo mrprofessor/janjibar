@@ -111,11 +111,18 @@ snapshots a second and paints only visible rows.
 
 ## Milestones
 
-0. **Spike** (done, `spike/`)
+0. **Spike** (done, ported and removed; see commit `ff1e9ec` for the code)
    - GPUI window with a live, virtualized pod list from kube-rs.
    - 71 MB footprint, 14 MB stripped binary, 44 s cold release build.
 1. **Foundations** (weeks 1 to 2): workspace, Herdr-style shell, bridge,
    catalog, CI on macOS.
+   - Done: workspace and lints, nix dev shell, CI, agent guide and skills,
+     login-shell PATH sync, kubeconfig catalog across files, one client per
+     context, pod watch with batched snapshots, Herdr-style shell with the
+     clusters list and a live pod table, empty and error states.
+   - Left: live kubeconfig reload with `notify`, disconnect and clear-error
+     actions, keyboard focus and navigation, status bar extras (server
+     version, watch count, own memory).
 2. **Read-only explorer** (weeks 3 to 6): watch hub, tables, inspector, CRDs.
 3. **Operate** (weeks 7 to 9): edits, actions, logs, metrics columns. MVP.
 4. **Terminals and logs** (weeks 10 to 12): gpui-cn terminal fork, pod exec,
@@ -127,9 +134,11 @@ snapshots a second and paints only visible rows.
 
 - Unit-test row projection, filter tokens, Helm secret decoding, PromQL
   builders and kubeconfig merging.
-- Run the engine headless against kind in CI: watches, edits, logs, exec,
-  port-forward.
-- GPUI view tests with `TestAppContext` for keyboard flows and the palette.
+- Run the engine headless against a fake API server in CI (`tests/watch.rs`,
+  in place today), and against kind once CI can run it: watches, edits, logs,
+  exec, port-forward.
+- GPUI view tests with `TestAppContext` for keyboard flows and the palette
+  (blocked for now, see the change log).
 - Load test: a kind cluster with 5,000 pods and 100 CRDs must stay smooth and
   under 150 MB.
 - Manual checks: VoiceOver, IME, exec auth plugins (aws, gke, kubelogin).
@@ -156,3 +165,32 @@ No local proxy process. GPUI types must not appear in `engine` or `model`.
 - Exec auth plugins block and print prompts to stderr. Build clients on
   blocking threads and surface prompts in the UI.
 - GPUI accessibility and IME are young. Test early, report upstream.
+
+## Change log
+
+Changes to this plan, newest first.
+
+### 9 November 2026: first slice
+
+- **Fake API server for engine tests.** Engine tests run against a small
+  in-repo HTTP server that lists and watches pods
+  (`crates/engine/tests/support/fake_api.rs`). The same server runs as
+  `cargo run -p engine --example fake_cluster` for UI work without a cluster.
+- **No auto-connect.** The app lists contexts and connects only when one is
+  picked, so an exec plugin never pops a browser login at launch. `--context
+  NAME` connects at start for scripts and development.
+- **Ages refresh on a slow tick.** Ages change with time, not with objects.
+  The engine re-projects once a second and still sends a snapshot only when
+  the rows differ, so a quiet cluster wakes the UI rarely (pods under two
+  minutes old show seconds and update each second).
+- **GPUI view tests are blocked.** gpui-kit's `test-support` feature makes
+  Cargo resolve `gpui-fast`, which pins `taffy =0.15.0` and conflicts with
+  the rest of the tree. Retry on the next gpui-kit release.
+- **Release builds keep symbols.** Cargo's default release strip breaks
+  proc-macro dylibs with this toolchain on macOS 27. Strip at packaging time.
+- **Memory needs a window size.** The first slice measured 250 MB physical
+  footprint with the window at 3840x2224 pixels (a tiling window manager made
+  it full screen). About 207 MB of that is GPU surfaces that scale with window
+  pixels; the heap is about 27 MB. The 150 MB load-test budget should name a
+  window size, for example 1360x840 points.
+

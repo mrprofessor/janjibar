@@ -160,6 +160,10 @@ See `references/async.md` for details and sources.
 - Port external behaviour faithfully and test against known outputs (for
   example kubectl's age and status strings).
 - Async tests: `#[tokio::test]`, and `tokio::time::pause()` for timing logic.
+- `clippy.toml`'s test allowances cover `#[test]` fns and `#[cfg(test)]`
+  modules only. Helper fns in `tests/*.rs` still trip `unwrap_used`; put one
+  crate-level `#![allow(clippy::unwrap_used, ..., reason = "...")]` at the top
+  of that test file (see `crates/engine/tests/watch.rs`).
 - GPUI view tests: see the `gpui` skill.
 
 ## Docs and comments

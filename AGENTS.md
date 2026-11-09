@@ -37,6 +37,7 @@ also sets `DEVELOPER_DIR` to the system Xcode.
 nix develop                                   # interactive shell
 nix develop -c cargo build                    # build everything
 nix develop -c cargo run -p app               # run the app (binary: janjibar)
+nix develop -c cargo run -p app -- --context NAME   # connect to NAME at start
 nix develop -c cargo run -p app --release     # release build, for measuring
 nix develop -c cargo test --workspace         # all tests (no cluster needed)
 nix develop -c cargo clippy --workspace --all-targets -- -D warnings
@@ -102,8 +103,18 @@ Load the skill before working in its area. They live in `.agents/skills/`.
 | `gpui` | Touching `ui`, `app` or `bridge`: views, entities, actions, theme.   |
 | `kube` | Touching `engine`: kubeconfig, clients, watches, logs, exec, apply.  |
 
-## Test cluster
+## Testing without a cluster
 
-There is no cluster in CI, and engine tests must not need one. For manual
-checks the owner's machine has a kind cluster; ask before using a cluster you
-did not create, and never change anything outside a throwaway namespace.
+There is no cluster in CI, and engine tests must not need one.
+
+- Unit tests sit next to the code; kubeconfig fixtures are in
+  `crates/engine/tests/fixtures`.
+- `crates/engine/tests/watch.rs` runs the engine end to end against a fake API
+  server (`crates/engine/tests/support/fake_api.rs`).
+- To see the app with data, run the same server as an example:
+  `cargo run -p engine --example fake_cluster -- --kubeconfig /tmp/fake.yaml`,
+  then start the app with `KUBECONFIG=/tmp/fake.yaml` and `--context fake`.
+- The owner's machine has a kind cluster for manual checks. Never change
+  anything in a real cluster outside a throwaway namespace you delete after.
+- Screenshots: capture only the app's window (`screencapture -l <id>`), never
+  the whole screen, and never commit them.
