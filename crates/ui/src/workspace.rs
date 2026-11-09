@@ -552,6 +552,7 @@ impl Workspace {
                         el.child(
                             div()
                                 .id("open-logs")
+                                .debug_selector(|| "open-logs".to_owned())
                                 .h(px(22.0))
                                 .px(px(7.0))
                                 .flex()

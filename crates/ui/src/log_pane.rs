@@ -215,6 +215,7 @@ impl Render for LogPane {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("log-pane")
+            .debug_selector(|| "log-pane".to_owned())
             .key_context("LogPane")
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::focus_search))
@@ -382,6 +383,7 @@ impl LogPane {
         let styled = StyledText::new(text).with_highlights(highlights.into_iter().map(highlight));
 
         let mut row = div()
+            .debug_selector(|| format!("log-line-{ix}"))
             .w_full()
             .flex()
             .gap(px(COLUMN_GAP))
@@ -582,6 +584,7 @@ fn toggle(
 ) -> impl IntoElement {
     div()
         .id(id)
+        .debug_selector(|| id.to_owned())
         .h(px(22.0))
         .px(px(7.0))
         .flex()
@@ -598,6 +601,7 @@ fn toggle(
 fn icon_button(id: &'static str, glyph: Icon) -> gpui_kit::Stateful<gpui_kit::Div> {
     div()
         .id(id)
+        .debug_selector(|| id.to_owned())
         .size(px(20.0))
         .flex_none()
         .flex()
