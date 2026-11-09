@@ -23,6 +23,11 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      # The term crate builds libghostty-vt from Ghostty's source with Zig.
+      # Keep the version in step with zig_0_17 in flake.nix.
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
