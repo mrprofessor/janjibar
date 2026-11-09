@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use crate::{ConnectionState, ContextName, GroupVersionResource};
+use crate::{ConnectionState, ContextName, GroupVersionResource, Health};
 
 /// The type of a column's values, as the server declares it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -47,7 +47,9 @@ pub struct Column {
     pub name: Arc<str>,
     /// The type of the values.
     pub ty: ColumnType,
-    /// A display hint, like `name`. Often empty.
+    /// A display hint, like `name`. Often empty. Typed specs also use
+    /// `status` (coloured by [`TableRow::health`]) and `muted` (secondary
+    /// text, like a node name).
     pub format: Arc<str>,
     /// 0 for the default view. Higher numbers are extra detail, like the
     /// columns `kubectl get -o wide` adds.
@@ -71,6 +73,9 @@ pub struct TableRow {
     pub cells: Arc<[Arc<str>]>,
     /// Display values for [`TableSnapshot::detail_columns`], in the same order.
     pub details: Arc<[Arc<str>]>,
+    /// How the `status` column is coloured. Typed specs know it; server-side
+    /// tables send [`Health::Unknown`].
+    pub health: Health,
 }
 
 /// All rows of one kind in one context at one moment.

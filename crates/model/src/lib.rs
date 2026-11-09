@@ -11,11 +11,11 @@ mod helm;
 mod kinds;
 mod log;
 mod metrics;
-mod pod;
+pub mod resource;
 mod table;
 
 pub use catalog::{Catalog, ContextInfo, ContextName, SourceProblem};
-pub use event::{Command, ConnectError, ConnectionState, Event};
+pub use event::{Command, ConnectError, ConnectionState, Event, SubscriptionId};
 pub use forward::{
     ForwardId, ForwardParseError, ForwardRow, ForwardSpec, ForwardState, ForwardTarget,
 };
@@ -33,5 +33,5 @@ pub use metrics::{
     QueryMethod, Sample, ServiceRef, TimeRange, Usage, UsageHistory, UsageInterest, UsageObject,
     UsageScope, UsageSnapshot, UsageStatus, WorkloadKind,
 };
-pub use pod::{Health, PodRow, PodSnapshot, Ready};
+pub use resource::Health;
 pub use table::{Column, ColumnType, TableRow, TableSnapshot};
