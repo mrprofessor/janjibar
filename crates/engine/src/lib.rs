@@ -9,6 +9,7 @@ pub mod catalog;
 mod client;
 pub mod discovery;
 mod errors;
+mod helm_releases;
 pub mod logs;
 pub mod pods;
 pub mod shell_env;
@@ -19,7 +20,7 @@ use std::sync::Arc;
 
 use kube::config::Kubeconfig;
 use model::{Command, ConnectError, ConnectionState, ContextName, Event, LogTabId};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 pub use catalog::KubeconfigSources;
 use client::ClientPool;
@@ -68,6 +69,11 @@ struct Engine {
     active: Option<AbortOnDrop<()>>,
     /// Open log tabs. Removing one drops its task and stops its streams.
     logs: HashMap<LogTabId, AbortOnDrop<()>>,
+    /// The selected context's client once it connects, for views the UI
+    /// opens on demand.
+    connected: watch::Sender<helm_releases::Connected>,
+    /// Helm releases, while the UI shows them.
+    helm: helm_releases::HelmFeed,
 }
 
 async fn run(
@@ -83,6 +89,8 @@ async fn run(
         catalog: model::Catalog::default(),
         active: None,
         logs: HashMap::new(),
+        connected: watch::Sender::new(None),
+        helm: helm_releases::HelmFeed::default(),
     };
     engine.reload().await;
     while let Some(command) = commands.recv().await {
@@ -102,6 +110,11 @@ async fn run(
             }
             Command::CloseLogs(tab) => {
                 engine.logs.remove(&tab);
+            }
+            Command::Helm(command) => {
+                engine
+                    .helm
+                    .command(command, &engine.connected, &engine.events);
             }
         }
     }
@@ -138,6 +151,7 @@ impl Engine {
         tracing::info!(%context, "context selected");
         // Stop the previous watch before starting the next.
         self.active = None;
+        self.connected.send_replace(None);
         let events = self.events.clone();
         if self.catalog.get(&context).is_none() {
             let _ = events.send(Event::Connection {
@@ -148,6 +162,7 @@ impl Engine {
         }
         let clients = self.clients.clone();
         let kubeconfig = Arc::clone(&self.kubeconfig);
+        let connected = self.connected.clone();
         let task = tokio::spawn(async move {
             let _ = events.send(Event::Connection {
                 context: context.clone(),
@@ -155,6 +170,7 @@ impl Engine {
             });
             match clients.get(&context, &kubeconfig).await {
                 Ok(client) => {
+                    connected.send_replace(Some((context.clone(), client.clone())));
                     let kinds =
                         discovery::send_kinds(context.clone(), client.clone(), events.clone());
                     tokio::join!(kinds, pods::watch_pods(context, client, events));

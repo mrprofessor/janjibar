@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 model.workspace = true
+helm.workspace = true
 kube.workspace = true
 k8s-openapi.workspace = true
 tokio.workspace = true
@@ -23,6 +24,9 @@ jiff = { workspace = true, features = ["tz-system", "tzdb-zoneinfo"] }
 [dev-dependencies]
 tokio = { workspace = true, features = ["net", "io-util"] }
 tempfile.workspace = true
+# Building Helm release payloads in tests.
+base64.workspace = true
+flate2.workspace = true
 
 [lints]
 workspace = true

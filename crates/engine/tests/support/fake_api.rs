@@ -18,8 +18,8 @@
 //!   and `sinceTime` (whole seconds). A followed stream ends when the
 //!   container crashes; see [`FakeApi::crash`] and [`FakeApi::start_container`].
 //! - Other namespaced core objects, such as `secrets` and `configmaps`, added
-//!   with [`FakeApi::add_object`], can be listed and fetched, with label
-//!   selectors, paging and metadata-only responses.
+//!   with [`FakeApi::add_object`], can be listed, fetched and watched, with
+//!   label selectors, paging and metadata-only responses.
 //!
 //! Every request is logged so tests can check what was asked for. Everything
 //! else is a 404. There is no TLS and no auth.
@@ -61,6 +61,7 @@ struct Inner {
     events: broadcast::Sender<Change>,
     /// Tells open watches to end with `410 Gone`.
     expire: broadcast::Sender<()>,
+    object_events: broadcast::Sender<ObjectChange>,
     open_watches: AtomicUsize,
     /// List requests served, Table or not.
     lists: AtomicUsize,
@@ -87,6 +88,19 @@ struct State {
     requests: Vec<Request>,
     /// Container logs, by namespace, pod and container.
     logs: HashMap<LogKey, ContainerLog>,
+    /// Every stored-object change so far, so a watch can replay from its
+    /// resourceVersion.
+    object_history: Vec<ObjectChange>,
+}
+
+/// One add, change or delete of a stored object.
+#[derive(Clone)]
+struct ObjectChange {
+    rv: u64,
+    plural: String,
+    namespace: String,
+    kind: &'static str,
+    object: Value,
 }
 
 /// (namespace, pod, container)
@@ -155,10 +169,12 @@ impl FakeApi {
         let addr = listener.local_addr()?;
         let (events, _) = broadcast::channel(4096);
         let (expire, _) = broadcast::channel(16);
+        let (object_events, _) = broadcast::channel(4096);
         let inner = Arc::new(Inner {
             state: Mutex::new(State::default()),
             events,
             expire,
+            object_events,
             open_watches: AtomicUsize::new(0),
             lists: AtomicUsize::new(0),
             aggregated_discovery: AtomicBool::new(true),
@@ -509,7 +525,47 @@ impl FakeApi {
                 .to_owned()
         };
         let key = (plural.to_owned(), field("namespace"), field("name"));
+        let kind = if state.objects.contains_key(&key) {
+            "MODIFIED"
+        } else {
+            "ADDED"
+        };
+        let rv = state.resource_version;
+        self.record_object(&mut state, rv, kind, &key, object.clone());
         state.objects.insert(key, object);
+    }
+
+    /// Deletes a stored object if it exists.
+    pub fn delete_object(&self, plural: &str, namespace: &str, name: &str) {
+        let mut state = self.lock();
+        let key = (plural.to_owned(), namespace.to_owned(), name.to_owned());
+        let Some(mut object) = state.objects.remove(&key) else {
+            return;
+        };
+        state.resource_version += 1;
+        let rv = state.resource_version;
+        object["metadata"]["resourceVersion"] = rv.to_string().into();
+        self.record_object(&mut state, rv, "DELETED", &key, object);
+    }
+
+    fn record_object(
+        &self,
+        state: &mut State,
+        rv: u64,
+        kind: &'static str,
+        key: &(String, String, String),
+        object: Value,
+    ) {
+        let change = ObjectChange {
+            rv,
+            plural: key.0.clone(),
+            namespace: key.1.clone(),
+            kind,
+            object,
+        };
+        state.object_history.push(change.clone());
+        // No receivers just means no watch is open yet.
+        let _ = self.inner.object_events.send(change);
     }
 
     /// Makes every request for `plural` answer 403 Forbidden.
@@ -1017,6 +1073,10 @@ async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
                 continue;
             }
             Route::Other => {
+                if request.is_watch() {
+                    watch_objects(stream, &inner, &request).await;
+                    return;
+                }
                 let (status, body) = objects_response(&inner, &request);
                 if write_response(&mut stream, status, &body).await.is_err() {
                     return;
@@ -1489,17 +1549,7 @@ fn objects_response(inner: &Inner, request: &Request) -> (&'static str, String) 
     if state.forbidden.contains(plural) {
         return failure(403, "Forbidden");
     }
-    let shape = |object: &Value| {
-        if request.wants_metadata() {
-            serde_json::json!({
-                "kind": "PartialObjectMetadata",
-                "apiVersion": "meta.k8s.io/v1",
-                "metadata": object["metadata"],
-            })
-        } else {
-            object.clone()
-        }
-    };
+    let shape = |object: &Value| shaped(object, request.wants_metadata());
 
     if let Some(name) = name {
         let key = (
@@ -1547,6 +1597,105 @@ fn objects_response(inner: &Inner, request: &Request) -> (&'static str, String) 
         "items": matching[start..end].iter().map(|o| shape(o)).collect::<Vec<_>>(),
     });
     ("200 OK", body.to_string())
+}
+
+/// An object as sent: whole, or only its metadata.
+fn shaped(object: &Value, metadata_only: bool) -> Value {
+    if metadata_only {
+        json!({
+            "kind": "PartialObjectMetadata",
+            "apiVersion": "meta.k8s.io/v1",
+            "metadata": object["metadata"],
+        })
+    } else {
+        object.clone()
+    }
+}
+
+/// Streams changes to stored objects of one plural, replayed from the
+/// requested resourceVersion.
+async fn watch_objects(mut stream: TcpStream, inner: &Inner, request: &Request) {
+    let segments: Vec<&str> = request.path.split('/').skip(1).collect();
+    let (namespace, plural) = match segments.as_slice() {
+        ["api", "v1", plural] => (None, (*plural).to_owned()),
+        ["api", "v1", "namespaces", ns, plural] => (Some((*ns).to_owned()), (*plural).to_owned()),
+        _ => {
+            let (status, body) = failure(404, "NotFound");
+            let _ = write_response(&mut stream, status, &body).await;
+            return;
+        }
+    };
+    let from = request
+        .param("resourceVersion")
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+    let selector = request.param("labelSelector").unwrap_or_default();
+    let metadata_only = request.wants_metadata();
+    let wanted = |change: &ObjectChange| {
+        change.plural == plural
+            && namespace.as_ref().is_none_or(|n| *n == change.namespace)
+            && matches_labels(&change.object, &selector)
+    };
+    let line = |change: &ObjectChange| {
+        json!({
+            "type": change.kind,
+            "object": shaped(&change.object, metadata_only),
+        })
+        .to_string()
+    };
+
+    // Subscribe before reading history so nothing falls in between.
+    let mut live = inner.object_events.subscribe();
+    let (forbidden, replay) = {
+        let state = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
+        let replay: Vec<ObjectChange> = state
+            .object_history
+            .iter()
+            .filter(|c| c.rv > from)
+            .cloned()
+            .collect();
+        (state.forbidden.contains(&plural), replay)
+    };
+    if forbidden {
+        let (status, body) = failure(403, "Forbidden");
+        let _ = write_response(&mut stream, status, &body).await;
+        return;
+    }
+    let head =
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n";
+    if stream.write_all(head.as_bytes()).await.is_err() {
+        return;
+    }
+    inner.open_watches.fetch_add(1, Ordering::SeqCst);
+    let _guard = WatchGuard(&inner.open_watches);
+    let mut last = from;
+    for change in replay {
+        last = change.rv;
+        if wanted(&change) && write_chunk(&mut stream, &line(&change)).await.is_err() {
+            return;
+        }
+    }
+    let mut probe = [0u8; 1];
+    loop {
+        tokio::select! {
+            change = live.recv() => {
+                let Ok(change) = change else { return };
+                if change.rv <= last {
+                    continue;
+                }
+                last = change.rv;
+                if wanted(&change) && write_chunk(&mut stream, &line(&change)).await.is_err() {
+                    return;
+                }
+            }
+            // A read of 0 bytes (or an error) means the client hung up.
+            read = stream.read(&mut probe) => {
+                if matches!(read, Ok(0) | Err(_)) {
+                    return;
+                }
+            }
+        }
+    }
 }
 
 /// Equality-only label selectors, like `owner=helm,name=web`.
