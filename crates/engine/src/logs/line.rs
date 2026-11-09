@@ -10,6 +10,9 @@ use model::{Clock, LogLevel};
 /// would stall the UI, and nobody reads that far right.
 const MAX_LINE_BYTES: usize = 16 * 1024;
 
+/// The end of a line that was cut.
+const CUT_MARK: char = '…';
+
 /// How far into a line to look for a level. Levels sit near the start.
 const LEVEL_SCAN_BYTES: usize = 256;
 
@@ -39,7 +42,7 @@ pub fn clean(raw: &[u8]) -> String {
     let mut column = 0usize;
     while let Some(c) = chars.next() {
         if out.len() >= MAX_LINE_BYTES {
-            out.push('…');
+            out.push(CUT_MARK);
             break;
         }
         match c {
@@ -57,6 +60,14 @@ pub fn clean(raw: &[u8]) -> String {
         }
     }
     out
+}
+
+/// Marks text whose raw line was cut while reading. [`clean`] may have cut
+/// and marked it already; one mark is enough.
+pub fn mark_cut(text: &mut String) {
+    if !text.ends_with(CUT_MARK) {
+        text.push(CUT_MARK);
+    }
 }
 
 /// Skips the rest of an escape sequence after ESC: CSI (`ESC [ ... final`),
@@ -256,6 +267,17 @@ mod tests {
         let cut = clean(&long);
         assert!(cut.ends_with('…'));
         assert!(cut.len() <= MAX_LINE_BYTES + '…'.len_utf8());
+    }
+
+    #[test]
+    fn a_cut_is_marked_once() {
+        let mut text = "short".to_owned();
+        mark_cut(&mut text);
+        assert_eq!(text, "short…");
+        let mut already = clean(&vec![b'x'; MAX_LINE_BYTES * 2]);
+        let before = already.clone();
+        mark_cut(&mut already);
+        assert_eq!(already, before);
     }
 
     #[test]
