@@ -138,7 +138,7 @@ snapshots a second and paints only visible rows.
   in place today), and against kind once CI can run it: watches, edits, logs,
   exec, port-forward.
 - GPUI view tests with `TestAppContext` for keyboard flows and the palette
-  (blocked for now, see the change log).
+  (harness in `crates/ui/tests`, first tests in place).
 - Load test: a kind cluster with 5,000 pods and 100 CRDs must stay smooth and
   under 150 MB.
 - Manual checks: VoiceOver, IME, exec auth plugins (aws, gke, kubelogin).
