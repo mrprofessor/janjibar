@@ -12,6 +12,12 @@ gpui-kit.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+# GPUI's test support (TestAppContext, #[gpui_kit::test]). Turned on through
+# gpui-pre itself, not `gpui-kit/test-support`: that feature pulls gpui-fast
+# into lockfile resolution, and gpui-fast pins crates below our lock (see the
+# gpui skill). It is the same crate the kit re-exports, so types match.
+gpui-pre = { version = "=0.3.11", features = ["test-support"] }
 
 [lints]
 workspace = true
