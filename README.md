@@ -43,6 +43,13 @@ wraps it in a `.app` signed ad hoc. That is enough to run it on the Mac that
 built it. There is no Developer ID signature or notarization yet, so
 Gatekeeper blocks a copy downloaded on another Mac.
 
+The Release workflow builds the same bundle on GitHub and zips it. Run it by
+hand from the Actions tab for a test build; the zip is kept as a workflow
+artifact. To publish, push a tag that matches the workspace version, like
+`v0.1.0`, and the zip and its checksum are attached to that tag's release. To
+open a downloaded copy, unzip it and run
+`xattr -dr com.apple.quarantine <name>.app` first.
+
 ## Develop
 
 See [AGENTS.md](AGENTS.md) for the layout, commands and rules. It is written
