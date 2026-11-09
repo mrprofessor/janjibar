@@ -17,9 +17,11 @@
 //!   kubelet's: `container`, `follow`, `previous`, `timestamps`, `tailLines`
 //!   and `sinceTime` (whole seconds). A followed stream ends when the
 //!   container crashes; see [`FakeApi::crash`] and [`FakeApi::start_container`].
-//! - Other namespaced core objects, such as `secrets` and `configmaps`, added
-//!   with [`FakeApi::add_object`], can be listed and fetched, with label
-//!   selectors, paging and metadata-only responses.
+//! - Any other object, of any group, namespaced or cluster-wide, added with
+//!   [`FakeApi::put`] or [`FakeApi::add_object`]: list, get and watch, with
+//!   label selectors, paging and metadata-only responses. Single pods can be
+//!   fetched too.
+//! - `/version`, for the connection probe.
 //!
 //! - Any other path can get canned answers with [`FakeApi::respond`], such
 //!   as a Prometheus behind the service proxy.
@@ -83,8 +85,11 @@ struct State {
     crontabs: BTreeMap<(String, String), CronTab>,
     /// Every event so far, so a watch can replay from its resourceVersion.
     history: Vec<Change>,
-    /// Other objects as JSON, by plural, namespace and name.
+    /// Other objects as JSON, by collection path, namespace and name.
     objects: BTreeMap<(String, String, String), Value>,
+    /// Non-core collections that have held an object. Other groups are 404,
+    /// as on a real server that does not serve them.
+    served: BTreeSet<String>,
     /// Plurals that answer 403 Forbidden.
     forbidden: BTreeSet<String>,
     /// Every request so far, oldest first.
@@ -127,6 +132,8 @@ struct ContainerLog {
 enum Resource {
     Pods,
     CronTabs,
+    /// Anything in the generic object store; [`Change::collection`] says which.
+    Object,
 }
 
 /// A stored custom resource.
@@ -147,6 +154,8 @@ struct CronTab {
 struct Change {
     rv: u64,
     resource: Resource,
+    /// The collection path of a [`Resource::Object`] change; empty otherwise.
+    collection: String,
     namespace: String,
     kind: &'static str,
     object: Value,
@@ -501,21 +510,103 @@ impl FakeApi {
         });
     }
 
-    /// Adds (or replaces) a namespaced core object, such as a Secret or
-    /// `ConfigMap`. `plural` is its URL segment (`secrets`, `configmaps`).
-    /// The namespace and name come from the object's metadata.
-    pub fn add_object(&self, plural: &str, mut object: Value) {
+    /// Adds (or replaces) a namespaced core object given as JSON, such as a
+    /// Secret or `ConfigMap`. `plural` is its URL segment (`secrets`,
+    /// `configmaps`). The namespace and name come from the object's metadata.
+    pub fn add_object(&self, plural: &str, object: Value) {
+        self.store(collection_for("v1", plural), object);
+    }
+
+    /// Adds or replaces any typed object. Pods go to the pod store, so they
+    /// also show up in pod Tables; everything else to the generic store.
+    pub fn put<K>(&self, object: &K)
+    where
+        K: k8s_openapi::Resource + k8s_openapi::Metadata<Ty = ObjectMeta> + serde::Serialize,
+    {
+        let value = serde_json::to_value(object).unwrap_or_default();
+        let path = collection::<K>();
+        if path == collection::<Pod>() {
+            let Ok(mut pod) = serde_json::from_value::<Pod>(value) else {
+                return;
+            };
+            let mut state = self.lock();
+            let rv = next_rv(&mut state);
+            pod.metadata.resource_version = Some(rv.to_string());
+            let key = (
+                pod.metadata.namespace.clone().unwrap_or_default(),
+                pod.metadata.name.clone().unwrap_or_default(),
+            );
+            let kind = if state.pods.insert(key, pod.clone()).is_some() {
+                "MODIFIED"
+            } else {
+                "ADDED"
+            };
+            self.record(&mut state, pod_change(rv, kind, &pod));
+            return;
+        }
+        self.store(path, value);
+    }
+
+    /// Deletes an object of kind `K` if it exists.
+    pub fn delete<K: k8s_openapi::Resource>(&self, namespace: Option<&str>, name: &str) {
+        let path = collection::<K>();
+        if path == collection::<Pod>() {
+            self.delete_pod(namespace.unwrap_or_default(), name);
+            return;
+        }
         let mut state = self.lock();
-        state.resource_version += 1;
-        object["metadata"]["resourceVersion"] = state.resource_version.to_string().into();
+        let key = (
+            path.clone(),
+            namespace.unwrap_or_default().to_owned(),
+            name.to_owned(),
+        );
+        let Some(mut object) = state.objects.remove(&key) else {
+            return;
+        };
+        let rv = next_rv(&mut state);
+        object["metadata"]["resourceVersion"] = rv.to_string().into();
+        let change = object_change(rv, "DELETED", path, object);
+        self.record(&mut state, change);
+    }
+
+    fn store(&self, collection: String, mut object: Value) {
+        let mut state = self.lock();
+        let rv = next_rv(&mut state);
+        object["metadata"]["resourceVersion"] = rv.to_string().into();
         let field = |key: &str| {
             object["metadata"][key]
                 .as_str()
                 .unwrap_or_default()
                 .to_owned()
         };
-        let key = (plural.to_owned(), field("namespace"), field("name"));
-        state.objects.insert(key, object);
+        let key = (collection.clone(), field("namespace"), field("name"));
+        state.served.insert(collection.clone());
+        let kind = if state.objects.insert(key, object.clone()).is_some() {
+            "MODIFIED"
+        } else {
+            "ADDED"
+        };
+        let change = object_change(rv, kind, collection, object);
+        self.record(&mut state, change);
+    }
+
+    /// Requests for `collection` that asked for metadata only.
+    pub fn metadata_requests(&self, collection: &str) -> usize {
+        self.count_requests(collection, true)
+    }
+
+    /// Requests for `collection` that asked for full objects or Tables.
+    pub fn full_requests(&self, collection: &str) -> usize {
+        self.count_requests(collection, false)
+    }
+
+    fn count_requests(&self, collection: &str, metadata: bool) -> usize {
+        self.lock()
+            .requests
+            .iter()
+            .filter(|r| r.wants_metadata() == metadata)
+            .filter(|r| parse_path(&r.path).is_some_and(|t| t.collection == collection))
+            .count()
     }
 
     /// Makes every request for `plural` answer 403 Forbidden.
@@ -559,6 +650,79 @@ impl Inner {
 fn next_rv(state: &mut State) -> u64 {
     state.resource_version += 1;
     state.resource_version
+}
+
+/// The collection path of a kind, like `/apis/apps/v1/deployments`.
+pub fn collection<K: k8s_openapi::Resource>() -> String {
+    collection_for(K::API_VERSION, K::URL_PATH_SEGMENT)
+}
+
+fn collection_for(api_version: &str, plural: &str) -> String {
+    if api_version.contains('/') {
+        format!("/apis/{api_version}/{plural}")
+    } else {
+        format!("/api/{api_version}/{plural}")
+    }
+}
+
+/// What a request path points at in the generic store.
+struct Target {
+    collection: String,
+    namespace: Option<String>,
+    name: Option<String>,
+}
+
+/// Parses `/api/v1[/namespaces/{ns}]/{plural}[/{name}]` and the `/apis/...`
+/// equivalent.
+fn parse_path(path: &str) -> Option<Target> {
+    let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
+    let (api_version, rest) = match parts.as_slice() {
+        ["api", version, rest @ ..] => ((*version).to_owned(), rest),
+        ["apis", group, version, rest @ ..] => (format!("{group}/{version}"), rest),
+        _ => return None,
+    };
+    let (namespace, plural, name) = match rest {
+        ["namespaces", ns, plural] => (Some(*ns), *plural, None),
+        ["namespaces", ns, plural, name] => (Some(*ns), *plural, Some(*name)),
+        [plural] => (None, *plural, None),
+        [plural, name] => (None, *plural, Some(*name)),
+        _ => return None,
+    };
+    Some(Target {
+        collection: collection_for(&api_version, plural),
+        namespace: namespace.map(str::to_owned),
+        name: name.map(str::to_owned),
+    })
+}
+
+fn object_change(rv: u64, kind: &'static str, collection: String, object: Value) -> Change {
+    Change {
+        rv,
+        resource: Resource::Object,
+        collection,
+        namespace: object["metadata"]["namespace"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned(),
+        kind,
+        meta: object["metadata"].clone(),
+        cells: Value::Null,
+        object,
+    }
+}
+
+/// Strips an object down to what a metadata-only request returns.
+fn metadata_only(object: &Value) -> Value {
+    json!({
+        "kind": "PartialObjectMetadata",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": object["metadata"],
+    })
+}
+
+/// A running pod created `age_seconds` ago, for tests that build their own.
+pub fn sample_pod(namespace: &str, name: &str, age_seconds: i64) -> Pod {
+    running_pod(namespace, name, age_seconds, 0, &[], &["app"])
 }
 
 fn log_key(namespace: &str, pod: &str, container: &str) -> LogKey {
@@ -664,6 +828,7 @@ fn pod_change(rv: u64, kind: &'static str, pod: &Pod) -> Change {
     Change {
         rv,
         resource: Resource::Pods,
+        collection: String::new(),
         namespace: pod.metadata.namespace.clone().unwrap_or_default(),
         kind,
         object: serde_json::to_value(pod).unwrap_or_default(),
@@ -739,6 +904,7 @@ fn crontab_change(rv: u64, kind: &'static str, c: &CronTab) -> Change {
     Change {
         rv,
         resource: Resource::CronTabs,
+        collection: String::new(),
         namespace: c.namespace.clone(),
         kind,
         object: crontab_object(c),
@@ -829,6 +995,8 @@ fn columns(resource: Resource) -> Value {
             col("Image", "string", "", 1, "The container image the job runs"),
             col("Age", "date", "", 0, ""),
         ]),
+        // Generic objects are never served as Tables.
+        Resource::Object => json!([]),
     }
 }
 
@@ -941,6 +1109,7 @@ impl Selector {
 
 /// Where a request goes.
 enum Route {
+    Version,
     Api,
     Apis,
     CoreV1,
@@ -962,6 +1131,7 @@ fn route(path: &str) -> Route {
     let crontab_base = format!("/apis/{CRONTAB_GROUP}/v1");
     let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
     match parts.as_slice() {
+        ["", "version"] => Route::Version,
         ["", "api"] => Route::Api,
         ["", "apis"] => Route::Apis,
         ["", "api", "v1"] => Route::CoreV1,
@@ -1028,6 +1198,11 @@ async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
         let aggregated =
             request.wants_aggregated() && inner.aggregated_discovery.load(Ordering::SeqCst);
         let body = match route(&request.path) {
+            Route::Version => json!({
+                "major": "1", "minor": "37", "gitVersion": "v1.37.0-fake", "gitCommit": "fake",
+                "gitTreeState": "clean", "buildDate": "2026-11-01T00:00:00Z",
+                "goVersion": "go1.26", "compiler": "gc", "platform": "linux/arm64",
+            }),
             Route::Api if aggregated => aggregated_core(),
             Route::Api => json!({
                 "kind": "APIVersions",
@@ -1049,10 +1224,12 @@ async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
                         .unwrap_or(0);
                     let watch = Watch {
                         resource,
+                        collection: String::new(),
                         namespace,
                         selector: request.selector(),
                         table: request.wants_table(),
                         include_object: request.include_object(),
+                        metadata_only: request.wants_metadata(),
                     };
                     serve_watch(stream, &inner, &watch, from).await;
                     return;
@@ -1070,6 +1247,27 @@ async fn serve(mut stream: TcpStream, inner: Arc<Inner>) {
                 continue;
             }
             Route::Other => {
+                if request.is_watch()
+                    && let Some(target) = parse_path(&request.path)
+                    && served(&inner, &target)
+                    && !forbidden(&inner, &target)
+                {
+                    let from = request
+                        .param("resourceVersion")
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(0);
+                    let watch = Watch {
+                        resource: Resource::Object,
+                        collection: target.collection,
+                        namespace: target.namespace,
+                        selector: request.selector(),
+                        table: false,
+                        include_object: true,
+                        metadata_only: request.wants_metadata(),
+                    };
+                    serve_watch(stream, &inner, &watch, from).await;
+                    return;
+                }
                 let (status, body) = objects_response(&inner, &request);
                 if write_response(&mut stream, status, &body).await.is_err() {
                     return;
@@ -1111,6 +1309,8 @@ fn list(inner: &Inner, request: &Request, resource: Resource, namespace: Option<
             .filter(|((ns, _), _)| in_namespace(ns))
             .map(|(_, c)| (crontab_object(c), crontab_cells(c), crontab_meta(c)))
             .collect(),
+        // Generic objects are listed by `objects_response`.
+        Resource::Object => Vec::new(),
     };
     let all: Vec<(Value, Value, Value)> = all
         .into_iter()
@@ -1152,6 +1352,7 @@ fn list(inner: &Inner, request: &Request, resource: Resource, namespace: Option<
     let (kind, api_version) = match resource {
         Resource::Pods => ("PodList", "v1".to_owned()),
         Resource::CronTabs => ("CronTabList", format!("{CRONTAB_GROUP}/v1")),
+        Resource::Object => ("List", "v1".to_owned()),
     };
     json!({
         "kind": kind,
@@ -1175,15 +1376,19 @@ fn table_row(cells: &Value, meta: &Value, include_object: bool) -> Value {
 /// What one watch connection streams.
 struct Watch {
     resource: Resource,
+    /// For [`Resource::Object`]: the collection path.
+    collection: String,
     namespace: Option<String>,
     selector: Selector,
     table: bool,
     include_object: bool,
+    metadata_only: bool,
 }
 
 impl Watch {
     fn wants(&self, change: &Change) -> bool {
         change.resource == self.resource
+            && (self.resource != Resource::Object || change.collection == self.collection)
             && self
                 .namespace
                 .as_deref()
@@ -1202,6 +1407,8 @@ impl Watch {
                 "columnDefinitions": if first { columns(self.resource) } else { Value::Null },
                 "rows": [table_row(&change.cells, &change.meta, self.include_object)],
             })
+        } else if self.metadata_only {
+            metadata_only(&change.object)
         } else {
             change.object.clone()
         };
@@ -1529,39 +1736,52 @@ impl Drop for WatchGuard<'_> {
     }
 }
 
-/// Answers a list or get of a stored object.
+/// True when the server knows the target's collection: every core `v1`
+/// collection, and any other that has held an object.
+fn served(inner: &Inner, target: &Target) -> bool {
+    target.collection.starts_with("/api/v1/") || inner.lock().served.contains(&target.collection)
+}
+
+/// True when the target's plural was made to answer 403.
+fn forbidden(inner: &Inner, target: &Target) -> bool {
+    let plural = target.collection.rsplit('/').next().unwrap_or_default();
+    inner.lock().forbidden.contains(plural)
+}
+
+/// Answers a list or get from the generic store (and gets of single pods).
 fn objects_response(inner: &Inner, request: &Request) -> (&'static str, String) {
-    let segments: Vec<&str> = request.path.split('/').skip(1).collect();
-    let (namespace, plural, name) = match segments.as_slice() {
-        ["api", "v1", plural] => (None, *plural, None),
-        ["api", "v1", "namespaces", ns, plural] => (Some(*ns), *plural, None),
-        ["api", "v1", "namespaces", ns, plural, name] => (Some(*ns), *plural, Some(*name)),
-        _ => return failure(404, "NotFound"),
+    let Some(target) = parse_path(&request.path).filter(|t| served(inner, t)) else {
+        return failure(404, "NotFound");
     };
-    let state = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
-    if state.forbidden.contains(plural) {
+    if forbidden(inner, &target) {
         return failure(403, "Forbidden");
     }
+    let state = inner.lock();
     let shape = |object: &Value| {
         if request.wants_metadata() {
-            serde_json::json!({
-                "kind": "PartialObjectMetadata",
-                "apiVersion": "meta.k8s.io/v1",
-                "metadata": object["metadata"],
-            })
+            metadata_only(object)
         } else {
             object.clone()
         }
     };
+    let namespace = target.namespace.as_deref();
 
-    if let Some(name) = name {
-        let key = (
-            plural.to_owned(),
-            namespace.unwrap_or_default().to_owned(),
-            name.to_owned(),
-        );
-        return match state.objects.get(&key) {
-            Some(object) => ("200 OK", shape(object).to_string()),
+    if let Some(name) = &target.name {
+        let found = if target.collection == collection::<Pod>() {
+            state
+                .pods
+                .get(&(namespace.unwrap_or_default().to_owned(), name.clone()))
+                .map(|pod| serde_json::to_value(pod).unwrap_or_default())
+        } else {
+            let key = (
+                target.collection.clone(),
+                namespace.unwrap_or_default().to_owned(),
+                name.clone(),
+            );
+            state.objects.get(&key).cloned()
+        };
+        return match found {
+            Some(object) => ("200 OK", shape(&object).to_string()),
             None => failure(404, "NotFound"),
         };
     }
@@ -1570,8 +1790,10 @@ fn objects_response(inner: &Inner, request: &Request) -> (&'static str, String) 
     let matching: Vec<&Value> = state
         .objects
         .iter()
-        .filter(|((p, ns, _), object)| {
-            p == plural && namespace.is_none_or(|n| n == ns) && matches_labels(object, &selector)
+        .filter(|((c, ns, _), object)| {
+            *c == target.collection
+                && namespace.is_none_or(|n| n == ns)
+                && matches_labels(object, &selector)
         })
         .map(|(_, object)| object)
         .collect();
@@ -1584,7 +1806,7 @@ fn objects_response(inner: &Inner, request: &Request) -> (&'static str, String) 
         .param("limit")
         .and_then(|l| l.parse::<usize>().ok())
         .map_or(matching.len(), |limit| (start + limit).min(matching.len()));
-    let mut metadata = serde_json::json!({ "resourceVersion": state.resource_version.to_string() });
+    let mut metadata = json!({ "resourceVersion": state.resource_version.to_string() });
     if end < matching.len() {
         metadata["continue"] = end.to_string().into();
     }
@@ -1593,7 +1815,7 @@ fn objects_response(inner: &Inner, request: &Request) -> (&'static str, String) 
     } else {
         ("List", "v1")
     };
-    let body = serde_json::json!({
+    let body = json!({
         "kind": kind,
         "apiVersion": api_version,
         "metadata": metadata,
