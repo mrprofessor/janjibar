@@ -68,11 +68,7 @@ fn every_query_matches_freelens() {
         let nodes = entry["nodes"].as_bool().unwrap();
         let expected = entry["promql"].as_str().unwrap();
         let query = query_for(category, key, nodes);
-        let actual = prometheus::promql(
-            provider,
-            &query,
-            PrometheusSettings::DEFAULT_MOUNTPOINTS,
-        );
+        let actual = prometheus::promql(provider, &query, PrometheusSettings::DEFAULT_MOUNTPOINTS);
         if actual != expected {
             mismatches.push(format!(
                 "{provider:?} {category}.{key} nodes={nodes}\n  expected: {expected}\n  actual:   {actual}"

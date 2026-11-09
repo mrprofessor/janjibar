@@ -196,7 +196,10 @@ mod tests {
             regex(WorkloadKind::StatefulSet),
             "web-[[:digit:]]+|api-[[:digit:]]+"
         );
-        assert_eq!(regex(WorkloadKind::Job), "web-[[:alnum:]]{5}|api-[[:alnum:]]{5}");
+        assert_eq!(
+            regex(WorkloadKind::Job),
+            "web-[[:alnum:]]{5}|api-[[:alnum:]]{5}"
+        );
     }
 
     #[test]
